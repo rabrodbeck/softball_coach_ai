@@ -47,11 +47,19 @@ if "pending_question" not in st.session_state:
     st.session_state.pending_question = None
 
 # --- 4. Render conversation history ---
-# Loops through past interactions stroed in memory and draws them on screen.
+# Check if history is empty to display a welcome "whiteboard" banner
+if not st.session_state.messages:
+    st.info(
+        "📋**Coach's Whiteboard Active:** Knowledge base laoded for 8u-14u fastpitch stragegy. "
+        "Select a topic on the left or type your situational question below."
+    )
+
 for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
+    # Dynamically select an avatar based on user or coach role
+    custom_avatar = "🧢" if msg["role"] == "user" else "🥎"
+
+    with st.chat_message(msg["role"], avatar=custom_avatar):
         st.markdown(msg["content"])
-        # If the historic message contains vetorstore sources, render them in an expander
         if msg.get("sources"):
             with st.expander("📚 Sources used"):
                 for s in msg["sources"]:
@@ -70,38 +78,51 @@ elif chat_input_val:
     prompt = chat_input_val
 
 # --- 6. Process new messages and run the AI ---
-# Runs only when a new question has been sent.
+# This block executes only when 'prompt' contains a value (from typing or the sidebar)
 if prompt:
-    # Append user question to history and instantly render it to the chat container
+    # 6a. Log and render user input
+    # append the question to the permanent historical message list
     st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
+
+    # render the user's question bubble instantly
+    # the 'avatar' argument swaps the generic user icon out for a coach's cap emoji
+    with st.chat_message("user", avatar="🧢"):
         st.markdown(prompt)
 
-    # Generate the assistant's reply
-    with st.chat_message("assistant"):
-        with st.spinner("Thinking..."):
-            # Execute the LangChain pipeline using the unified `.invoke()` method
+    # 6b. Generate AI Response
+    # open assistant chat bubble, setting it's icon to a softball emoji
+    with st.chat_message("assistant", avatar="🥎"):
+        # st.spinner keeps a visual loading wheel on the screen while the llm runs
+        # implemented custom themed text ("Drawing up the play...") to fit the app vibe
+        with st.spinner("Drawing up the play..."):
+            # send the new question along with implicit past chat history to the langchain model
             result = st.session_state.chain.invoke({"question": prompt})
             answer = result["answer"]
 
-            # Extract document file names from retrieved chunks, cleaning up file paths
-            # (Requires `return_source_documents=True` to be enabled in retriever.py)
+            # 6c. Extract and Format sources
+            # loop throu the raw document chunks retrieved from the vector database
+            # use split('/')[-1] and split('\\')[-1] to strip away messy absolute machine paths
+            # and isolate the clean, readable filename
             sources = list(set([
                 doc.metadata.get("source", "Unknown").split('/')[-1] or
                 doc.metadata.get("source", "Unknown").split('\\')[-1]
                 for doc in result.get("source_documents", [])
             ]))
 
-        # Display the text response
+        # 6d. Render AI Output to Screen
+        # display the main markdown text response provided by the llm
         st.markdown(answer)
 
-        # Display collapsible list of reference documents if any were retrieved
+        # If the backend successfully retrieved matching document source chunks,
+        # group them inside a clean, drop-down toggle element so they don't clutter the screen
         if sources:
             with st.expander("📚 Sources used"):
                 for s in sources:
                     st.caption(f"• {s}")
 
-    # Save the assistant's response and source tracking into history for the next rerun
+    # 6e. Persoist conversation state
+    # append the final response text and its source referenceds to the historic message list
+    # this prevents the answer from disappearing on the next Streamlit rerun loop
     st.session_state.messages.append({
         "role": "assistant",
         "content": answer,
