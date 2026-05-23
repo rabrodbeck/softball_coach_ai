@@ -1,7 +1,7 @@
 import streamlit as st
 from retriever import build_chain
 # Import our newly built database connection routines directly
-from database import init_db, authenticate_coach, register_coach
+from src.database import init_db, authenticate_coach, register_coach
 
 # --- 1. PAGE CONFIGURATION ---
 # Sets up the browser tab title, favicon emoji, and centers the layout
