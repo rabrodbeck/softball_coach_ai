@@ -1,5 +1,6 @@
 import sqlite3
 import hashlib
+import re
 
 def get_db_connection():
     """Establishes connection to the SQLite database file."""
@@ -65,3 +66,27 @@ def authenticate_coach(username, password):
             "age_group": row["primary_age_group"]
         }
     return None
+
+def is_valid_email(email):
+    """Checks if th euser name matches a standard email format."""
+    email_regex = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+    return re.match(email_regex, email.strip()) is not None
+
+def validate_password_strength(password):
+    """Validates password complexity requirements.
+    Returns (True, "Success") or (False, "Error message detailing what failed")."""
+    if len(password) < 8:
+        return False, "Password must be at least 8 characters long."
+    if " " in password or "\t" in password or "\n" in password:
+        return False, "Password cannot contain spaces or whitespaces."
+    if not any(char.isupper() for char in password):
+        return False, "Password must contain at least one uppercase letter."
+    if not any(char.islower() for char in password):
+        return False, "Password must contain at least one lowercase letter."
+    
+    # Checking against specific allowed special characer list: ! @ # $ % ^ & *
+    special_chars = "!@#$%^&*"
+    if not any(char in special_chars for char in password):
+        return False, "Password must contain at least one of these special characters: ! @ # $ % ^ & *"
+    
+    return True, "Password meets all strength requirements."

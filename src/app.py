@@ -94,27 +94,45 @@ if not st.session_state.access_granted:
     # LEVEL C: New Account Registration Creation View
     elif st.session_state.auth_mode == "register":
         st.markdown("### 📋 Create Your Coaching Profile")
-        new_user = st.text_input("Choose Username / Email", key="reg_user_input")
-        new_pwd = st.text_input("Choose Password", type="password", key="reg_pwd_input")
-        new_name = st.text_input("Coach Full Name", placeholder="Coach Ryan")
-        new_loc = st.text_input("Your Location (City, State)", placeholder="Streamwood, IL")
+
+        # Guide the user on requirements
+        st.caption("Username must be a valid email address. Passwords require 8+ characters, with at least 1 uppercase, 1 lowercase, 1 special character (!@#$%^&*) and no spaces.")
+                
+        new_user = st.text_input("Email", key="reg_user_input")
+        new_pwd = st.text_input("Password", type="password", key="reg_pwd_input")
+        new_name = st.text_input("Coach Full Name", placeholder="")
+        new_loc = st.text_input("Your Location (City, State)", placeholder="")
         new_age = st.selectbox("Primary Age Group Coached", ["8U Division", "10U Division", "12U Division", "14U Division"])
+
+        # Pull in the validation helpers from database.py
+        from database import is_valid_email, validate_password_strength
         
         c1, c2 = st.columns(2)
         with c1:
             if st.button("Build Playbook Account", use_container_width=True, type="primary"):
-                if new_user and new_pwd and new_name and new_loc:
-                    success = register_coach(new_user, new_pwd, new_name, new_loc, new_age)
-                    if success:
-                        st.success("Account constructed! Back out to log in.")
+                if not (new_user and new_pwd and new_name and new_loc):
+                    st.error("All profile fields are required.")
+                
+                # 1. Enforce email format for username
+                elif not is_valid_email(new_user):
+                    st.error("Invalid Username. Your username must be a valid email address (e.g., coach@example.com).")
+                
+                else:
+                    # 2. Enforce password complexity rules
+                    is_strong_pwd, pwd_msg = validate_password_strength(new_pwd)
+                    
+                    if not is_strong_pwd:
+                        st.error(pwd_msg)
+                    
+                    # 3. If both pass, try writing to SQLite database
+                    elif register_coach(new_user, new_pwd, new_name, new_loc, new_age):
+                        st.success("Account created successfully! Redirecting to login...")
                         st.session_state.auth_mode = "login"
                         st.rerun()
                     else:
-                        st.error("That username is already taken. Please try another.")
-                else:
-                    st.warning("Please fill out all available data fields to build your profile.")
+                        st.error("An account with that email address already exists.")
         with c2:
-            if st.button("⬅️ Back to Portal", use_container_width=True, key="back_from_reg"):
+            if st.button("⬅️ Back to Portal", use_container_width=True):
                 st.session_state.auth_mode = "menu"
                 st.rerun()
 
