@@ -1,10 +1,15 @@
 import sqlite3
 import hashlib
 import re
+import os
+
 
 def get_db_connection():
     """Establishes connection to the SQLite database file."""
-    conn = sqlite3.connect("softball_ap.db")
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    DB_PATH = os.path.join(BASE_DIR, "softball_ap.db")
+    # conn = sqlite3.connect("softball_ap.db")
+    conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
