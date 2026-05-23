@@ -1,5 +1,5 @@
 import streamlit as st
-from retriever import build_chain
+from src.retriever import build_chain
 # Import our newly built database connection routines directly
 from src.database import init_db, authenticate_coach, register_coach
 
