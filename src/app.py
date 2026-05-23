@@ -3,6 +3,14 @@ from src.retriever import build_chain
 # Import our newly built database connection routines directly
 from src.database import init_db, authenticate_coach, register_coach
 
+@st.cache_resource
+def get_coaching_chain():
+    """
+    Loads and caches the underlying retriever chain. Caching prevents background
+    SDK modules from continually triggering server hooks on app reruns.
+    """
+    return build_chain()
+
 # --- 1. PAGE CONFIGURATION ---
 # Sets up the browser tab title, favicon emoji, and centers the layout
 st.set_page_config(
@@ -28,7 +36,7 @@ if "auth_mode" not in st.session_state:
 
 if "chain" not in st.session_state:
     with st.spinner("Loading knowledge base..."):
-        st.session_state.chain = build_chain()
+        st.session_state.chain = get_coaching_chain()
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
