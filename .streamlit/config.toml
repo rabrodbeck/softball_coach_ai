@@ -1,8 +1,8 @@
 [theme]
-primaryColor = "#CCFF00"                # neon optic yellow (for buttons, spinners, highlights)
-backgroundColor = "#6E3A27"             # deep infield clay/terra cotta
-secondaryBackgroundColor = "#2D3136"    # lighter charcoal (for the sidebar and text areas)
-textColor = "#F4F5F6"                   # crisp off-white (easy readability)
+primaryColor = "#CCFF00"
+backgroundColor = "#6E3A27"
+secondaryBackgroundColor = "#2D3136"
+textColor = "#F4F5F6"
 font = "sans serif"
 
 [server]
