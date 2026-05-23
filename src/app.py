@@ -1,7 +1,9 @@
 import streamlit as st
 from retriever import build_chain
+# Import our newly built database connection routines directly
+from database import init_db, authenticate_coach, register_coach
 
-# --- 1. Page Configuration ---
+# --- 1. PAGE CONFIGURATION ---
 # Sets up the browser tab title, favicon emoji, and centers the layout
 st.set_page_config(
     page_title = "Softball Coach AI",
@@ -12,142 +14,234 @@ st.set_page_config(
 st.title("🥎 Softball Coach AI")
 st.caption("Your AI-powered fastpitch coaching assistant.")
 
-# --- 2. SIDEBAR & SUGGESTED QUESTIONS ---
-# Create a left sidebar featuring quick-click sample questions and quick tools.
-with st.sidebar:
-    st.header("📋 Practice Plans")
-    
-    # Create the dropdown for the specific age divisions
-    selected_division = st.selectbox(
-        "Select Division:",
-        ["8U Division", "10U Division", "12U Division", "14U Division"],
-        index=2  # Defaults to 12U out of the box
-    )
-    
-    # Updated: Swapped out for a clean wood bat emoji and configured the background flags
-    if st.button("🥎 Generate Playbook", use_container_width=True):
-        macro_prompt = (
-            f"Build a comprehensive, structured practice plan template specifically designed for a "
-            f"{selected_division} fastpitch softball team. Break the session down into logical, chronological "
-            f"segments (e.g., dynamic warmups, fundamental skill stations, team defensive/offensive situations, "
-            f"and a high-energy conditioning game). For each section, provide precise timing guidelines, "
-            f"clear drill setup instructions, and age-appropriate coaching points focused on player development."
-        )
-        st.session_state.pending_question = macro_prompt
-        # Set a flag so the UI knows to suppress the user chat bubble and history log
-        st.session_state.is_sidebar_action = True
 
-# --- 3. Session state initialization ---
-# Streamlit scripts rerun from top to bottom on every user interaction.
-# st.session_state ensures variables survive across those returns.
+# --- 2. SESSION STATE INITIALIZATION ---
+# Initialize internal flags to govern dashboard security, guest states, and forms.
+if "access_granted" not in st.session_state:
+    st.session_state.access_granted = False
 
-# Initialize the LangChain RAP pipeline exactly once so it does't reload constantly
+if "active_user" not in st.session_state:
+    st.session_state.active_user = None
+
+if "auth_mode" not in st.session_state:
+    st.session_state.auth_mode = "menu"
+
 if "chain" not in st.session_state:
     with st.spinner("Loading knowledge base..."):
         st.session_state.chain = build_chain()
 
-# Initialize an empty list to keep track of the conversation logs.
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Initialize a slot to track quesitons origninating from the sidebar buttons.
 if "pending_question" not in st.session_state:
     st.session_state.pending_question = None
 
-# Initialize a flag to track if the current query came from a background action.
 if "is_sidebar_action" not in st.session_state:
     st.session_state.is_sidebar_action = False
 
-# --- 4. Render conversation history ---
-# Check if history is empty to display a welcome "whiteboard" banner
-if not st.session_state.messages:
-    st.info(
-        "📋**Coach's Whiteboard Active:** Knowledge base laoded for 8u-14u fastpitch stragegy. "
-        "Select a topic on the left or type your situational question below."
-    )
+# Auto-initialize the local file system database on setup run
+init_db()
 
-for msg in st.session_state.messages:
-    # Dynamically select an avatar based on user or coach role
-    custom_avatar = "🧢" if msg["role"] == "user" else "🥎"
-
-    with st.chat_message(msg["role"], avatar=custom_avatar):
-        st.markdown(msg["content"])
-        if msg.get("sources"):
-            with st.expander("📚 Sources used"):
-                for s in msg["sources"]:
-                    st.caption(f"• {s}")
-
-# --- 5. Capture user input ---
-# Render the standard chat input bar at the bottom of the page.
-chat_input_val = st.chat_input("Ask a coaching question...")
-
-# Determine if the active prompt is from a sidebar click or the manual text input
-prompt = None
-is_sidebar = False
-
-if st.session_state.pending_question:
-    prompt = st.session_state.pending_question
-    is_sidebar = st.session_state.is_sidebar_action
+# --- 3. THE 3-WAY GATEWAY PORTAL INTERFACE ---
+# Intercepts users who haven't logged in or bypassed via guest mode.
+if not st.session_state.access_granted:
+    st.subheader("⚾ Coaching Command Center Portal")
+    st.caption("Access your personalized dugout files or explore as a guest.")
     
-    # reset immediately to prevent infinite loops
-    st.session_state.pending_question = None 
-    st.session_state.is_sidebar_action = False
-elif chat_input_val:
-    prompt = chat_input_val
+    # LEVEL A: The Core Hub Choice Selection Menu
+    if st.session_state.auth_mode == "menu":
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if st.button("🔑 Log In", use_container_width=True):
+                st.session_state.auth_mode = "login"
+                st.rerun()
+                
+        with col2:
+            if st.button("📋 Create Account", use_container_width=True):
+                st.session_state.auth_mode = "register"
+                st.rerun()
+                
+        with col3:
+            # GUEST FLOW ROUTE: Grant access immediately with zero profile constraints
+            if st.button("🥎 Continue as Guest", use_container_width=True):
+                st.session_state.access_granted = True
+                st.session_state.active_user = None  # None cleanly marks a Guest identity
+                st.rerun()
+
+    # LEVEL B: Member Account Secure Sign-In View
+    elif st.session_state.auth_mode == "login":
+        st.markdown("### 🔑 Coach Login")
+        login_user = st.text_input("Username / Email", key="login_user_input")
+        login_pwd = st.text_input("Password", type="password", key="login_pwd_input")
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("Access Boardroom", use_container_width=True, type="primary"):
+                user_record = authenticate_coach(login_user, login_pwd)
+                if user_record:
+                    st.session_state.access_granted = True
+                    st.session_state.active_user = user_record
+                    st.success("Credentials verified! Welcome to the dugout.")
+                    st.rerun()
+                else:
+                    st.error("Invalid credentials. Please verify your username and password.")
+        with c2:
+            if st.button("⬅️ Back to Portal", use_container_width=True, key="back_from_login"):
+                st.session_state.auth_mode = "menu"
+                st.rerun()
+
+    # LEVEL C: New Account Registration Creation View
+    elif st.session_state.auth_mode == "register":
+        st.markdown("### 📋 Create Your Coaching Profile")
+        new_user = st.text_input("Choose Username / Email", key="reg_user_input")
+        new_pwd = st.text_input("Choose Password", type="password", key="reg_pwd_input")
+        new_name = st.text_input("Coach Full Name", placeholder="Coach Ryan")
+        new_loc = st.text_input("Your Location (City, State)", placeholder="Streamwood, IL")
+        new_age = st.selectbox("Primary Age Group Coached", ["8U Division", "10U Division", "12U Division", "14U Division"])
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("Build Playbook Account", use_container_width=True, type="primary"):
+                if new_user and new_pwd and new_name and new_loc:
+                    success = register_coach(new_user, new_pwd, new_name, new_loc, new_age)
+                    if success:
+                        st.success("Account constructed! Back out to log in.")
+                        st.session_state.auth_mode = "login"
+                        st.rerun()
+                    else:
+                        st.error("That username is already taken. Please try another.")
+                else:
+                    st.warning("Please fill out all available data fields to build your profile.")
+        with c2:
+            if st.button("⬅️ Back to Portal", use_container_width=True, key="back_from_reg"):
+                st.session_state.auth_mode = "menu"
+                st.rerun()
+
+# --- LEVEL D: ACTIVE RUNTIME APPLICATION WORKSPACE ---
+# Executes only if the access_granted flag resolves to True
+else:
+    # --- 4. SIDEBAR CONFIGURATION ---
+    with st.sidebar:
+        st.header("📋 Practice Plans")
+        
+        age_options = ["8U Division", "10U Division", "12U Division", "14U Division"]
+        
+        # Dynamically set index based on identity context (Member vs Guest)
+        if st.session_state.active_user is not None:
+            user_default_age = st.session_state.active_user["age_group"]
+            default_index = age_options.index(user_default_age) if user_default_age in age_options else 2
+        else:
+            default_index = 2  # Fall back directly to 12U if visiting as a guest
+            
+        selected_division = st.selectbox(
+            "Select Division:",
+            age_options,
+            index=default_index
+        )
+        
+        # Action execution hook configured with clean cricket-bat visual emoji
+        if st.button("🏏 Generate Playbook", use_container_width=True):
+            macro_prompt = (
+                f"Build a comprehensive, structured practice plan template specifically designed for a "
+                f"{selected_division} fastpitch softball team. Break the session down into logical, chronological "
+                f"segments (e.g., dynamic warmups, fundamental skill stations, team defensive/offensive situations, "
+                f"and a high-energy conditioning game). For each section, provide precise timing guidelines, "
+                f"clear drill setup instructions, and age-appropriate coaching points focused on player development."
+            )
+            st.session_state.pending_question = macro_prompt
+            st.session_state.is_sidebar_action = True
+
+
+    # --- 5. RENDER CONVERSATION HISTORY ---
+    # Welcome banner appears only if history logs are clean
+    if not st.session_state.messages:
+        st.info(
+            "📋**Coach's Whiteboard Active:** Knowledge base loaded for 8u-14u fastpitch strategy. "
+            "Select a topic on the left or type your situational question below."
+        )
+
+    for msg in st.session_state.messages:
+        custom_avatar = "🧢" if msg["role"] == "user" else "🥎"
+        with st.chat_message(msg["role"], avatar=custom_avatar):
+            st.markdown(msg["content"])
+            if msg.get("sources"):
+                with st.expander("📚 Sources used"):
+                    for s in msg["sources"]:
+                        st.caption(f"• {s}")
+
+
+    # --- 6. CAPTURE USER INPUT ---
+    chat_input_val = st.chat_input("Ask a coaching question...")
+
+    prompt = None
     is_sidebar = False
 
-# --- 6. Process new messages and run the AI ---
-# This block executes only when 'prompt' contains a value (from typing or the sidebar)
-if prompt:
-    # 6a. Log and render user input
-    if not is_sidebar:
-        # Standard typed question: append the question to the permanent historical message list
-        st.session_state.messages.append({"role": "user", "content": prompt})
+    # Extract prompt source origin to cleanly route history containers
+    if st.session_state.pending_question:
+        prompt = st.session_state.pending_question
+        is_sidebar = st.session_state.is_sidebar_action
+        
+        st.session_state.pending_question = None 
+        st.session_state.is_sidebar_action = False
+    elif chat_input_val:
+        prompt = chat_input_val
+        is_sidebar = False
 
-        # render the user's question bubble instantly
-        # the 'avatar' argument swaps the generic user icon out for a coach's cap emoji
-        with st.chat_message("user", avatar="🧢"):
-            st.markdown(prompt)
-    else:
-        # Sidebar generation click: Skip history logging and draw a clean structural header instead
-        st.subheader(f"📝 Custom Playbook: {selected_division}")
+    # --- 7. PROCESS NEW MESSAGES AND RUN AI ---
+    if prompt:
+        # Handle structural rendering for text versus button operations
+        if not is_sidebar:
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            with st.chat_message("user", avatar="🧢"):
+                st.markdown(prompt)
+        else:
+            st.subheader(f"📝 Custom Playbook: {selected_division}")
 
-    # 6b. Generate AI Response
-    # open assistant chat bubble, setting it's icon to a softball emoji
-    with st.chat_message("assistant", avatar="🥎"):
-        # st.spinner keeps a visual loading wheel on the screen while the llm runs
-        # implemented custom themed text ("Drawing up the play...") to fit the app vibe
-        with st.spinner("Drawing up the play..."):
-            # send the new question along with implicit past chat history to the langchain model
-            result = st.session_state.chain.invoke({"question": prompt})
-            answer = result["answer"]
+        with st.chat_message("assistant", avatar="🥎"):
+            with st.spinner("Drawing up the play..."):
+                
+                # ROUTING CHECK: Construct personalized instructions if a profile is present
+                if st.session_state.active_user is not None:
+                    profile = st.session_state.active_user
+                    profile_context_string = (
+                        f"You are directly advising Coach {profile['coach_name']}, based out of {profile['location']}. "
+                        f"They are the head coach of a competitive {profile['age_group']} fastpitch softball team. "
+                        f"Tailor all strategic advice, drill progressions, athletic expectations, and safety instructions "
+                        f"specifically to the developmental physiology and mental milestones of {profile['age_group']} players."
+                    )
+                else:
+                    # GUEST CONTEXT: Fall back to standard developmental framework routing
+                    profile_context_string = (
+                        f"You are directly advising a fastpitch softball coach running a developmental youth team. "
+                        f"Provide structurally sound coaching advice, age-appropriate drill breakdowns, and technical "
+                        f"guidance aligned with progressive youth athletic development frameworks."
+                    )
 
-            # 6c. Extract and Format sources
-            # loop throu the raw document chunks retrieved from the vector database
-            # use split('/')[-1] and split('\\')[-1] to strip away messy absolute machine paths
-            # and isolate the clean, readable filename
-            sources = list(set([
-                doc.metadata.get("source", "Unknown").split('/')[-1] or
-                doc.metadata.get("source", "Unknown").split('\\')[-1]
-                for doc in result.get("source_documents", [])
-            ]))
+                # Send both context payload parameters to the retriever module chain
+                result = st.session_state.chain.invoke({
+                    "profile_context": profile_context_string,
+                    "question": prompt
+                })
+                answer = result["answer"]
 
-        # 6d. Render AI Output to Screen
-        # display the main markdown text response provided by the llm
-        st.markdown(answer)
+                sources = list(set([
+                    doc.metadata.get("source", "Unknown").split('/')[-1] or
+                    doc.metadata.get("source", "Unknown").split('\\')[-1]
+                    for doc in result.get("source_documents", [])
+                ]))
 
-        # If the backend successfully retrieved matching document source chunks,
-        # group them inside a clean, drop-down toggle element so they don't clutter the screen
-        if sources:
-            with st.expander("📚 Sources used"):
-                for s in sources:
-                    st.caption(f"• {s}")
+            st.markdown(answer)
 
-    # 6e. Persoist conversation state
-    # append the final response text and its source referenceds to the historic message list
-    # this prevents the answer from disappearing on the next Streamlit rerun loop
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": answer,
-        "sources": sources
-    })
+            if sources:
+                with st.expander("📚 Sources used"):
+                    for s in sources:
+                        st.caption(f"• {s}")
+
+        # Persist data states to history arrays so details survive refreshes
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": answer,
+            "sources": sources
+        })    
+
