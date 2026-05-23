@@ -1,5 +1,4 @@
 import streamlit as st
-from src.retriever import build_chain
 # Import our newly built database connection routines directly
 from src.database import init_db, authenticate_coach, register_coach
 
@@ -9,6 +8,7 @@ def get_coaching_chain():
     Loads and caches the underlying retriever chain. Caching prevents background
     SDK modules from continually triggering server hooks on app reruns.
     """
+    from src.retriever import build_chain
     return build_chain()
 
 # --- 1. PAGE CONFIGURATION ---
