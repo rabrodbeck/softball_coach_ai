@@ -7,8 +7,14 @@ def initialize_backend_infrastructure():
     Isolates both database and AI components from the main thread execution,
     guaranteeing Streamlit successfully commands Port 8501 first.
     """
-    # 1. Lazy import the database routines
-    from src.database import init_db, authenticate_coach, register_coach
+    # 1. Lazy import the database routines and validation helpers
+    from src.database import (
+        init_db, 
+        authenticate_coach, 
+        register_coach, 
+        is_valid_email, 
+        validate_password_strength
+    )
     init_db()  # Run the SQLite setup inside the safe resource layer
     
     # 2. Lazy import the retriever routines
@@ -19,6 +25,8 @@ def initialize_backend_infrastructure():
     return {
         "authenticate": authenticate_coach,
         "register": register_coach,
+        "is_valid_email": is_valid_email,
+        "validate_password_strength": validate_password_strength,
         "chain": chain_instance
     }
 
@@ -37,6 +45,9 @@ infra = initialize_backend_infrastructure()
 
 
 # --- 2. SESSION STATE INITIALIZATION ---
+if "generating" not in st.session_state:
+    st.session_state.generating = False
+
 if "access_granted" not in st.session_state:
     st.session_state.access_granted = False
 
@@ -57,6 +68,14 @@ if "pending_question" not in st.session_state:
 
 if "is_sidebar_action" not in st.session_state:
     st.session_state.is_sidebar_action = False
+
+# Captures and carries the raw instruction payload safely across structural reruns
+if "active_prompt" not in st.session_state:
+    st.session_state.active_prompt = None
+
+# Input buffer queue to prevent double-submission data loss
+if "input_buffer_queue" not in st.session_state:
+    st.session_state.input_buffer_queue = []
 
 
 # --- 3. THE 3-WAY GATEWAY PORTAL INTERFACE ---
@@ -116,18 +135,18 @@ if not st.session_state.access_granted:
         new_name = st.text_input("Coach Full Name", placeholder="")
         new_loc = st.text_input("Your Location (City, State)", placeholder="")
         new_age = st.selectbox("Primary Age Group Coached", ["8U Division", "10U Division", "12U Division", "14U Division"])
-
-        from database import is_valid_email, validate_password_strength
         
         c1, c2 = st.columns(2)
         with c1:
             if st.button("Build Playbook Account", use_container_width=True, type="primary"):
                 if not (new_user and new_pwd and new_name and new_loc):
                     st.error("All profile fields are required.")
-                elif not is_valid_email(new_user):
+                
+                elif not infra["is_valid_email"](new_user):
                     st.error("Invalid Username. Your username must be a valid email address (e.g., coach@example.com).")
+                
                 else:
-                    is_strong_pwd, pwd_msg = validate_password_strength(new_pwd)
+                    is_strong_pwd, pwd_msg = infra["validate_password_strength"](new_pwd)
                     
                     if not is_strong_pwd:
                         st.error(pwd_msg)
@@ -137,10 +156,6 @@ if not st.session_state.access_granted:
                         st.rerun()
                     else:
                         st.error("An account with that email address already exists.")
-        with c2:
-            if st.button("⬅️ Back to Portal", use_container_width=True):
-                st.session_state.auth_mode = "menu"
-                st.rerun()
 
 # --- LEVEL D: ACTIVE RUNTIME APPLICATION WORKSPACE ---
 else:
@@ -181,7 +196,11 @@ else:
             "Select a topic on the left or type your situational question below."
         )
 
-    for msg in st.session_state.messages:
+    # Establish an explicit streaming target variable before entering the loop
+    streaming_target_placeholder = None
+
+    # Clean display hub: handles the rendering for all processed messages
+    for idx, msg in enumerate(st.session_state.messages):
         custom_avatar = "🧢" if msg["role"] == "user" else "🥎"
         with st.chat_message(msg["role"], avatar=custom_avatar):
             st.markdown(msg["content"])
@@ -189,72 +208,105 @@ else:
                 with st.expander("📚 Sources used"):
                     for s in msg["sources"]:
                         st.caption(f"• {s}")
+                        
+        # Drop the placeholder anchor immediately following the last user message,
+        # but only if the generation cycle flag is officially raised.
+        if st.session_state.generating and idx == len(st.session_state.messages) - 1:
+            if msg["role"] == "user":
+                streaming_target_placeholder = st.empty()
 
 
     # --- 6. CAPTURE USER INPUT ---
     chat_input_val = st.chat_input("Ask a coaching question...")
 
-    prompt = None
-    is_sidebar = False
+    if chat_input_val:
+        st.session_state.input_buffer_queue.append(chat_input_val)
 
     if st.session_state.pending_question:
-        prompt = st.session_state.pending_question
-        is_sidebar = st.session_state.is_sidebar_action
+        st.session_state.active_prompt = st.session_state.pending_question
+        display_prompt = f"📋 *Generated {selected_division} Playbook Template* "
+        st.session_state.messages.append({"role": "user", "content": display_prompt})
         
         st.session_state.pending_question = None 
         st.session_state.is_sidebar_action = False
-    elif chat_input_val:
-        prompt = chat_input_val
-        is_sidebar = False
+        st.session_state.generating = True  # Raise processing flag
+        st.rerun()
+        
+    elif st.session_state.input_buffer_queue and not st.session_state.active_prompt:
+        next_up = st.session_state.input_buffer_queue.pop(0)
+        st.session_state.active_prompt = next_up
+        st.session_state.messages.append({"role": "user", "content": next_up})
+        st.session_state.generating = True  # Raise processing flag
+        st.rerun()
 
-    # --- 7. PROCESS NEW MESSAGES AND RUN AI ---
-    if prompt:
-        if not is_sidebar:
-            st.session_state.messages.append({"role": "user", "content": prompt})
-            with st.chat_message("user", avatar="🧢"):
-                st.markdown(prompt)
+
+    # --- 7. LIVE IN-FLIGHT GENERATION LAYER ---
+    # Target our pre-allocated layout anchor built inside the history loop
+    if st.session_state.generating and streaming_target_placeholder is not None:
+        
+        if st.session_state.active_prompt:
+            raw_question = st.session_state.active_prompt
         else:
-            st.subheader(f"📝 Custom Playbook: {selected_division}")
+            raw_question = st.session_state.messages[-1]["content"]
+        
+        if st.session_state.active_user is not None:
+            profile = st.session_state.active_user
+            profile_context_string = (
+                f"You are directly advising Coach {profile['coach_name']}, based out of {profile['location']}. "
+                f"They are the head coach of a competitive {profile['age_group']} fastpitch softball team. "
+                f"Tailor all strategic advice, drill progressions, athletic expectations, and safety instructions "
+                f"specifically to the developmental physiology and mental milestones of {profile['age_group']} players."
+            )
+        else:
+            profile_context_string = (
+                f"You are directly advising a fastpitch softball coach running a developmental youth team. "
+                f"Provide structurally sound coaching advice, age-appropriate drill breakdowns, and technical "
+                f"guidance aligned with progressive youth athletic development frameworks."
+            )
 
-        with st.chat_message("assistant", avatar="🥎"):
-            with st.spinner("Drawing up the play..."):
-                
-                if st.session_state.active_user is not None:
-                    profile = st.session_state.active_user
-                    profile_context_string = (
-                        f"You are directly advising Coach {profile['coach_name']}, based out of {profile['location']}. "
-                        f"They are the head coach of a competitive {profile['age_group']} fastpitch softball team. "
-                        f"Tailor all strategic advice, drill progressions, athletic expectations, and safety instructions "
-                        f"specifically to the developmental physiology and mental milestones of {profile['age_group']} players."
-                    )
-                else:
-                    profile_context_string = (
-                        f"You are directly advising a fastpitch softball coach running a developmental youth team. "
-                        f"Provide structurally sound coaching advice, age-appropriate drill breakdowns, and technical "
-                        f"guidance aligned with progressive youth athletic development frameworks."
-                    )
+        # Pre-fetch context elements seamlessly before targeting our rendering window
+        with st.spinner("Analyzing playbook history..."):
+            retrieved_docs = st.session_state.chain.retriever.invoke(raw_question)
+            
+            sources = list(set([
+                doc.metadata.get("source", "Unknown").split('/')[-1] or
+                doc.metadata.get("source", "Unknown").split('\\')[-1]
+                for doc in retrieved_docs
+            ]))
 
-                result = st.session_state.chain.invoke({
-                    "profile_context": profile_context_string,
-                    "question": prompt
-                })
-                answer = result["answer"]
+        # Helper generator to normalize incoming text chunks
+        def get_stream_chunks():
+            token_stream = st.session_state.chain.stream({
+                "profile_context": profile_context_string,
+                "question": raw_question
+            })
+            for chunk in token_stream:
+                if isinstance(chunk, dict) and "answer" in chunk:
+                    yield chunk["answer"]
+                elif isinstance(chunk, str):
+                    yield chunk
 
-                sources = list(set([
-                    doc.metadata.get("source", "Unknown").split('/')[-1] or
-                    doc.metadata.get("source", "Unknown").split('\\')[-1]
-                    for doc in result.get("source_documents", [])
-                ]))
+        # Stream directly into the persistent layout slot managed by Section 5
+        with streaming_target_placeholder.container():
+            with st.chat_message("assistant", avatar="🥎"):
+                full_response = st.write_stream(get_stream_chunks())
+                if sources:
+                    with st.expander("📚 Sources used"):
+                        for s in sources:
+                            st.caption(f"• {s}")
 
-            st.markdown(answer)
-
-            if sources:
-                with st.expander("📚 Sources used"):
-                    for s in sources:
-                        st.caption(f"• {s}")
-
+        # Commit final payload directly to history array for downstream passes
         st.session_state.messages.append({
             "role": "assistant",
-            "content": answer,
+            "content": full_response,
             "sources": sources
         })
+        
+        # Clear out state control registers safely
+        st.session_state.active_prompt = None
+        st.session_state.generating = False  # Lower processing flag
+        
+        # Force an instantaneous structural rerun. This guarantees Section 5 takes 
+        # official ownership of the newly added message element, locking the DOM 
+        # layout state before any downstream race conditions or interactions occur.
+        st.rerun()
