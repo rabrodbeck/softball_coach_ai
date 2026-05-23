@@ -1,24 +1,22 @@
 import os
-from dotenv import load_dotenv
+import streamlit as st
 
 # Core
-from langchain_chroma import Chroma
+# FIX 1: Pulled Chroma from langchain_community to guarantee package compatibility
+from langchain_community.vectorstores import Chroma
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 
 # Memory + Old Chains (using langchain_classic)
 from langchain_classic.memory import ConversationBufferMemory
-# FIX 1: Corrected typo (Conversational) and simplified import path
 from langchain_classic.chains import ConversationalRetrievalChain
 
 # Prompts
 from langchain_core.prompts import PromptTemplate
 
-load_dotenv()
+# FIX 2: Dynamically calculate absolute pathing for the vectorstore folder
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PERSIST_DIR = os.path.join(BASE_DIR, "vectorstore")
 
-PERSIST_DIR = "vectorstore"
-
-# FIX 2: Removed {chat_history} from this prompt, as the chain handles history 
-# in an upstream step and won't pass it to this specific template.
 SYSTEM_PROMPT = """You are an experienced fastpitch softball coach with deep
 expertise in youth development, particularly for players aged 8-14.
 Give practical, encouraging, age-appropriate advice grounded in context.
@@ -34,7 +32,18 @@ Context: {context}
 Question: {question}"""
 
 def build_chain():
-    embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+    # FIX 3: Explicitly pull the API Key from Streamlit Secrets so it doesn't rely on a local .env file
+    api_key = st.secrets["OPENAI_API_KEY"]
+    
+    embeddings = OpenAIEmbeddings(
+        model="text-embedding-3-small",
+        api_key=api_key
+    )
+    
+    # SAFETY CHECK: If the vectorstore directory wasn't pushed to GitHub, 
+    # create an empty one safely so the app still boots up instead of crashing.
+    if not os.path.exists(PERSIST_DIR):
+        os.makedirs(PERSIST_DIR, exist_ok=True)
     
     vectorstore = Chroma(
         persist_directory=PERSIST_DIR, 
@@ -52,9 +61,12 @@ def build_chain():
         output_key="answer"
     )
     
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3)
+    llm = ChatOpenAI(
+        model="gpt-4o-mini", 
+        temperature=0.3,
+        api_key=api_key
+    )
     
-    # FIX 2 (cont.): Updated input_variables to match the template
     prompt = PromptTemplate(
         input_variables=["context", "question"],
         template=SYSTEM_PROMPT
@@ -82,7 +94,6 @@ if __name__ == "__main__":
     
     for q in questions:
         print(f"\n=== Q: {q} ===")
-        # FIX 3: Swapped to the modern .invoke() syntax
         result = chain.invoke({"question": q})
         print(f"A: {result['answer']}")
         print("-" * 80)
