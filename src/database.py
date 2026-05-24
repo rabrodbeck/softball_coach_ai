@@ -6,8 +6,13 @@ import os
 
 def get_db_connection():
     """Establishes connection to the SQLite database file."""
-    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    DB_PATH = os.path.join(BASE_DIR, "softball_ap.db")
+    # Checks if running on Hugging Face Spaces with a mounted storage bucket
+    if os.path.exists("/data"):
+        DB_PATH = "/data/softball_ap.db"
+    else:
+        BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        DB_PATH = os.path.join(BASE_DIR, "softball_ap.db")
+        
     # conn = sqlite3.connect("softball_ap.db")
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -50,7 +55,7 @@ def register_coach(username, password, coach_name, location, age_group):
         return False
     finally:
         conn.close()
-                   
+                    
 def authenticate_coach(username, password):
     """Validates credentials against hashed database entries."""
     conn = get_db_connection()

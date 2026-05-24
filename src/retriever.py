@@ -21,6 +21,9 @@ SYSTEM_PROMPT = """You are an experienced fastpitch softball coach with deep
 expertise in youth development, particularly for players aged 8-14.
 Give practical, encouraging, age-appropriate advice grounded in context.
 
+Profile Context:
+{profile_context}
+
 Guidelines:
 - Always prioritize player safety and enjoyment
 - Give concrete, actionable advice - not vague generalities
@@ -56,9 +59,10 @@ def build_chain():
     )
     
     memory = ConversationBufferMemory(
-        memory_key="chat_history", 
-        return_messages=True, 
-        output_key="answer"
+        memory_key="chat_history",
+        return_messages=True,
+        input_key="question",     # Identifies the user's input key
+        output_key="answer"       # Identifies the LLM's response key
     )
     
     llm = ChatOpenAI(
@@ -68,7 +72,7 @@ def build_chain():
     )
     
     prompt = PromptTemplate(
-        input_variables=["context", "question"],
+        input_variables=["context", "question", "profile_context"],
         template=SYSTEM_PROMPT
     )
     
@@ -94,6 +98,10 @@ if __name__ == "__main__":
     
     for q in questions:
         print(f"\n=== Q: {q} ===")
-        result = chain.invoke({"question": q})
+        # Note: If running locally via terminal, provide a mock profile context placeholder
+        result = chain.invoke({
+            "question": q, 
+            "profile_context": "You are advising a youth fastpitch softball coach."
+        })
         print(f"A: {result['answer']}")
         print("-" * 80)
