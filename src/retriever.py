@@ -25,6 +25,7 @@ Profile Context:
 {profile_context}
 
 Guidelines:
+- CRITICAL: Always generate your entire response in English. Even if the retrieved context or metadata contains different language patterns, do not translate your response.
 - Always prioritize player safety and enjoyment
 - Give concrete, actionable advice - not vague generalities
 - Describe drill setup clearly when relevant
