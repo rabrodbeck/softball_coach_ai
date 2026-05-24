@@ -1,5 +1,10 @@
 import streamlit as st
 
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "username" not in st.session_state:
+    st.session_state.username = None
+
 # --- ALL IMPORTS AND INITIALIZATION HIDDEN SAFELY HERE ---
 @st.cache_resource
 def initialize_backend_infrastructure():
