@@ -1,0 +1,9 @@
+CREATE TABLE coaches (
+  id SERIAL PRIMARY KEY,
+  username  VARCHAR(255) UNIQUE NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  coach_name VARCHAR(255) NOT NULL,
+  location VARCHAR(255) NOT NULL,
+  primary_age_group VARCHAR(50) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);

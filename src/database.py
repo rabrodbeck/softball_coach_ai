@@ -1,21 +1,27 @@
-import sqlite3
+# import sqlite3
 import hashlib
 import re
+import psycopg2
+from psycopg2.extras import RealDictCursor
 import os
 
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
-def get_db_connection():
-    """Establishes connection to the SQLite database file."""
-    # Checks if running on Hugging Face Spaces with a mounted storage bucket
-    if os.path.exists("/data"):
-        DB_PATH = "/data/softball_ap.db"
-    else:
-        BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        DB_PATH = os.path.join(BASE_DIR, "softball_ap.db")
+# def get_db_connection():
+#     """Establishes connection to the SQLite database file."""
+#     # Checks if running on Hugging Face Spaces with a mounted storage bucket
+#     if os.path.exists("/data"):
+#         DB_PATH = "/data/softball_ap.db"
+#     else:
+#         BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+#         DB_PATH = os.path.join(BASE_DIR, "softball_ap.db")
         
-    # conn = sqlite3.connect("softball_ap.db")
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+#     # conn = sqlite3.connect("softball_ap.db")
+#     conn = sqlite3.connect(DB_PATH)
+#     conn.row_factory = sqlite3.Row
+#     return conn
+def get_db_connection():
+    conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
     return conn
 
 def init_db():
@@ -39,21 +45,40 @@ def hash_password(password):
     """Converts plain-text passwords into a secure SH-256 hash string."""
     return hashlib.sha256(password.encode()).hexdigest()
 
+# def register_coach(username, password, coach_name, location, age_group):
+#     """Attempts to insert a new coach profile into the SQLite database."""
+#     conn = get_db_connection()
+#     cursor = conn.cursor()
+#     try:
+#         pwd_hash = hash_password(password)
+#         cursor.execute('''
+#             INSERT INTO coaches (username, password_hash, coach_name, location, primary_age_group)
+#                        VALUES (?, ?, ?, ?, ?)
+#                        ''', (username.lower().strip(), pwd_hash, coach_name.strip(), location.strip(), age_group))
+#         conn.commit()
+#         return True
+#     except sqlite3.IntegrityError:
+#         return False
+#     finally:
+#         conn.close()
 def register_coach(username, password, coach_name, location, age_group):
-    """Attempts to insert a new coach profile into the SQLite database."""
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
         pwd_hash = hash_password(password)
-        cursor.execute('''
-            INSERT INTO coaches (username, password_hash, coach_name, location, primary_age_group)
-                       VALUES (?, ?, ?, ?, ?)
-                       ''', (username.lower().strip(), pwd_hash, coach_name.strip(), location.strip(), age_group))
+        cursor.execute(
+            """
+            INSERT INTO coaches (username, password_hash, coach_namne, location, primary_age_group)
+            VALUE (%s, %s, %s, %s, %s)
+            """,
+            (username.lower().strip(), pwd_hash, coach_name.strip(), location.strip(), age_group)
+        )
         conn.commit()
         return True
-    except sqlite3.IntegrityError:
+    except psycopg2.IntegrityError:
         return False
     finally:
+        cursor.close()
         conn.close()
                     
 def authenticate_coach(username, password):
