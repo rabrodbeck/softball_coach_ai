@@ -4,7 +4,8 @@ from dotenv import load_dotenv
 
 # Core
 # FIX 1: Pulled Chroma from langchain_community to guarantee package compatibility
-from langchain_community.vectorstores import Chroma
+# from langchain_community.vectorstores import Chroma
+from langchain_pinecone import PineConeVectorStore
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 
 # Memory + Old Chains (using langchain_classic)
@@ -52,10 +53,16 @@ def build_chain():
     if not os.path.exists(PERSIST_DIR):
         os.makedirs(PERSIST_DIR, exist_ok=True)
     
-    vectorstore = Chroma(
-        persist_directory=PERSIST_DIR, 
-        embedding_function=embeddings
+    # vectorstore = Chroma(
+    #     persist_directory=PERSIST_DIR, 
+    #     embedding_function=embeddings
+    # )
+    vectorstore = PineConeVectorStore(
+        index_name="softball-index",
+        embedding=embeddings,
+        pinecone_api_key=os.environ.get("PINECONE_API_KEY")
     )
+
     
     retriever = vectorstore.as_retriever(
         search_type="similarity", 
