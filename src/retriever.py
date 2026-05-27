@@ -1,5 +1,6 @@
 import os
 import streamlit as st
+from dotenv import load_dotenv
 
 # Core
 # FIX 1: Pulled Chroma from langchain_community to guarantee package compatibility
@@ -37,7 +38,9 @@ Question: {question}"""
 
 def build_chain():
     # FIX 3: Explicitly pull the API Key from Streamlit Secrets so it doesn't rely on a local .env file
-    api_key = st.secrets["OPENAI_API_KEY"]
+    # api_key = st.secrets["OPENAI_API_KEY"]
+    load_dotenv()
+    api_key = os.environ.get("OPENAI_API_KEY")
     
     embeddings = OpenAIEmbeddings(
         model="text-embedding-3-small",
