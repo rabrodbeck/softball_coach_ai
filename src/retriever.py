@@ -4,8 +4,7 @@ from dotenv import load_dotenv
 
 # Core
 # FIX 1: Pulled Chroma from langchain_community to guarantee package compatibility
-# from langchain_community.vectorstores import Chroma
-from langchain_community.vectorstores import PineconeVectorStore
+from langchain_community.vectorstores import PGVector
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 
 # Memory + Old Chains (using langchain_classic)
@@ -53,15 +52,16 @@ def build_chain():
     if not os.path.exists(PERSIST_DIR):
         os.makedirs(PERSIST_DIR, exist_ok=True)
     
-    # vectorstore = Chroma(
-    #     persist_directory=PERSIST_DIR, 
-    #     embedding_function=embeddings
-    # )
-    from pinecone import Pinecone
-    pc = Pinecone(api_key=os.environ.get("PINECONE_API_KEY"))
-    index = pc.index("softball-index")
-    vectorstore = PineconeVectorStore(index=index, embedding=embeddings)
+    # Connect directly to Supabase PGVector store using DATABASE_URL
+    # Note: PGVector expects the driver "postgresql+psycopg2" in the connection string
+    connection_string = api_key = os.environ.get("DATABASE_URL", "").replace("postgresql://", "postgresql+psycopg2://")
     
+    vectorstore = PGVector(
+        connection_string = connection_string,
+        embedding_function=embeddings,
+        collection_name="softball_playbook"
+    )
+
     retriever = vectorstore.as_retriever(
         search_type="similarity", 
         search_kwargs={"k": 6}
