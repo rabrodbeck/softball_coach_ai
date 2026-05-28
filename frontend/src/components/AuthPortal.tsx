@@ -20,8 +20,8 @@ export default function AuthPortal({ onLoginSuccess, onContinueAsGuest }: AuthPo
     const [success, setSuccess] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
 
-    // SEt the base URL of the FastAPI backend (running locally or in the cloud)
-    const API_BASE = 'http://localhost:8000';
+    // Set the base URL of the FastAPI backend (running locally or in the cloud)
+    const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
