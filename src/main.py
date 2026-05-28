@@ -9,8 +9,11 @@ app = FastAPI(title = "🥎 Softball Coach AI API")
 
 # Enable CORS so Reach frontend running on local host can talk to it
 app.add_middleware(
-    CORSMiddleware, 
-    allow_origins=["*"], # in production, swap with Vercel URL
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",                # local react dev server
+        "https://softball-coach-ai.vercel.app"  # production react site
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

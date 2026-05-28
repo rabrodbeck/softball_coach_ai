@@ -21,7 +21,7 @@ from langchain_openai import OpenAIEmbeddings
 # ==========================
 # Vector Store
 # ==========================
-from langchain_community.vectorstores import Chroma
+from langchain_community.vectorstores import PGVector
 
 # ==========================
 # Configuration
@@ -53,21 +53,21 @@ def split_documents(documents):
 
 def build_vectorstore(chunks):
     embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-    
-    # Clear old vectorstore if it exists
-    if os.path.exists(PERSIST_DIR):
-        import shutil
-        shutil.rmtree(PERSIST_DIR)
-        print(f"Cleared existing vectorstore at: {PERSIST_DIR}")
 
-    vectorstore = Chroma.from_documents(
+    # Connect directly to Supabase PGVector store using DATABASE_URL
+    # Note: PGVector expects the driver "postgresql+psycopg2" in the connection string
+    connection_string = os.environ.get("DATABASE_URL", "").replace("postgresql://", "postgresql+psycopg2://")
+
+    print("⌛ Conencting to Supabase and sending vectors...this may take a moment...")
+
+    vectorstore = PGVector.from_documents(
         documents=chunks,
         embedding=embeddings,
-        persist_directory=PERSIST_DIR
+        connection_string=connection_string,
+        collection_name="softball_playbook"
     )
-    
-    print(f"✅ Vectorstore successfully created with {len(chunks)} chunks!")
-    print(f"✅ Location: {PERSIST_DIR}")
+
+    print(f"✅ Supabase Database successfully seeded with {len(chunks)} chunks!")
     return vectorstore
 
 

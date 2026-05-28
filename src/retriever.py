@@ -54,7 +54,7 @@ def build_chain():
     
     # Connect directly to Supabase PGVector store using DATABASE_URL
     # Note: PGVector expects the driver "postgresql+psycopg2" in the connection string
-    connection_string = api_key = os.environ.get("DATABASE_URL", "").replace("postgresql://", "postgresql+psycopg2://")
+    connection_string = os.environ.get("DATABASE_URL", "").replace("postgresql://", "postgresql+psycopg2://")
     
     vectorstore = PGVector(
         connection_string = connection_string,
