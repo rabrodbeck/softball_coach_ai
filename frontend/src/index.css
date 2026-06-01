@@ -1,20 +1,20 @@
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
+  /* --- ACTIVE BRAND THEME: OPTIC FASTPITCH SPORTS THEME --- */
+  --text: #4a5568;             /* Deep slate body text */
+  --text-h: #0f172a;           /* Dark slate headers */
+  --bg: #ffffff;               /* Squeaky clean white background */
+  --border: #e2e8f0;           /* Soft border grey */
+  --code-bg: #f8fafc;          /* Pale slate code background */
+  
+  --accent: #059669;           /* Field Turf Green (Primary Accent for contrast) */
+  --accent-bg: rgba(5, 150, 105, 0.08);
+  --accent-border: rgba(5, 150, 105, 0.3);
+  --accent-text: #ffffff;      /* White text looks beautiful on Green! */
   --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
-
+  --shadow: rgba(0, 0, 0, 0.06) 0 4px 6px -1px, rgba(0, 0, 0, 0.04) 0 2px 4px -1px;
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
-
   font: 18px/145% var(--sans);
   letter-spacing: 0.18px;
   color-scheme: light dark;
@@ -24,31 +24,55 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-
   @media (max-width: 1024px) {
     font-size: 16px;
   }
 }
-
 @media (prefers-color-scheme: dark) {
   :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
+    --text: #94a3b8;             /* Sleek slate grey body text */
+    --text-h: #f8fafc;           /* Bright white headers */
+    --bg: #0b0f17;               /* Deep stadium night sky black/navy */
+    --border: #1e293b;           /* Slate border */
+    --code-bg: #111827;          /* Pitch dark code background */
+    
+    --accent: #dffe00;           /* Electric Optic Softball Yellow */
+    --accent-bg: rgba(223, 254, 0, 0.08);
+    --accent-border: rgba(223, 254, 0, 0.3);
+    --accent-text: #0b0f17;      /* Dark ink text for maximum contrast on optic yellow! */
+    
     --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+    --shadow: rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
   }
-
   #social .button-icon {
     filter: invert(1) brightness(2);
   }
 }
+
+/* =========================================================================
+   BACKUP THEME: ORIGINAL PURPLE AMETHYST THEME
+   If you ever want to revert, swap out the variables above with the values below:
+   
+   --text: #6b6375;
+   --text-h: #08060d;
+   --bg: #fff;
+   --border: #e5e4e7;
+   --code-bg: #f4f3ec;
+   --accent: #aa3bff;
+   --accent-bg: rgba(170, 59, 255, 0.1);
+   --accent-border: rgba(170, 59, 255, 0.5);
+   --accent-text: #ffffff;
+   (Dark Mode Overrides):
+   --text: #9ca3af;
+   --text-h: #f3f4f6;
+   --bg: #16171d;
+   --border: #2e303a;
+   --code-bg: #1f2028;
+   --accent: #c084fc;
+   --accent-bg: rgba(192, 132, 252, 0.15);
+   --accent-border: rgba(192, 132, 252, 0.5);
+   --accent-text: #ffffff;
+   ========================================================================= */
 
 #root {
   width: 100%;
@@ -225,7 +249,7 @@ code {
   border-radius: 8px;
   border: none;
   background: var(--accent);
-  color: white;
+  color: var(--accent-text);
   font-weight: 500;
   cursor: pointer;
   transition: opacity 0.2s ease;
@@ -328,7 +352,7 @@ code {
 
 .chat-message.user .message-text {
   background: var(--accent);
-  color: white;
+  color: var(--accent-text);
 }
 
 .btn-sources-toggle {
@@ -404,7 +428,7 @@ code {
   border-radius: 8px;
   border: none;
   background: var(--accent);
-  color: white;
+  color: var(--accent-text);
   cursor: pointer;
 }
 

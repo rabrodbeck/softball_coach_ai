@@ -20,8 +20,8 @@ export default function Sidebar({ currentDivision, isGuest }: SidebarProps) {
 
     return (
         <aside className="app-sidebar">
-            <div className="sidebar_group">
-                <label className="sidebar_label">
+            <div className="sidebar-group">
+                <label className="sidebar-label">
                     <Trophy className="icon-sidebar" />
                     Select Youth Division
                 </label>
