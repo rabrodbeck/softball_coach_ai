@@ -99,3 +99,81 @@ def validate_password_strength(password):
         return False, "Password must contain at least one of these special characters: ! @ # $ % ^ & *"
     
     return True, "Password meets all strength requirements."
+
+def create_team(coach_id: int, team_name: str, season: str, age_group: str):
+    """Creates a new team. If it's the first team, set it as active."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Check if the coach already has any teams
+        cursor.execute("SELECT count(*) FROM teams WHERE coach_id = %s", (coach_id))
+        count = cursor.fetchone()["count"]
+
+        # If this is the first team, make it active automatcially
+        is_active = (count == 0)
+
+        cursor.execute(
+            """
+            INSERT INTO teams (coach_id, team_name, season, age_group, is_active)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id, team_name, season, age_group, wins, losses, ties, is_active;
+            """,
+            (coach_id, team_name.strip(), season.strip(), age_group, is_active)
+        )
+        new_team = cursor.fetchone()
+        conn.commit()
+        return new_team
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        cursor.close()
+        conn.close()
+
+def get_coach_teams(coach_id: int):
+    """Retrieves all teams managed by a specific coach."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            SELECT id, team_name, season, age_group, wins, losses, ties, is_active
+            FROM teams
+            WHERE coach_id = %s
+            ORDER BY created_at DESC;
+            """,
+            (coach_id)
+        )
+        teams = cursor.fetchall()
+        return teams
+    finally:
+        cursor.close()
+        conn.close()
+
+def set_active_team(coach_id: int, team_id: int):
+    """Sets a specific team as active and de-activates all other teams for this coach."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # 1. De-activate all teams for this coach
+        cursor.execute(
+            "UDPATE teams SET is_active = false where coach_id = %s", (coach_id)
+        )
+        # 2. Activate the selected team
+        cursor.execute(
+            """
+            UPDATE teams SET is_active = true 
+            WHERE coach_id = %s AND id = %s
+            RETURNING id, team_name, season, age_group, wins, losses, ties, is_active;
+            """,
+            (coach_id, team_id)
+        )
+        active_team = cursor.fetchone()
+        conn.commit()
+        return active_team
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        cursor.close()
+        conn.close()

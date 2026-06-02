@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, EmailStr
 from src.retriever import build_chain
-from src.database import authenticate_coach, register_coach
+from src.database import authenticate_coach, register_coach, create_team, get_coach_teams, set_active_team
 
 app = FastAPI(title = "🥎 Softball Coach AI API")
 
@@ -36,6 +36,15 @@ class ChatRequest(BaseModel):
     age_group: str
     coach_name: str
     location: str
+
+class TeamRequest(BaseModel):
+    coach_id: int
+    team_name: str
+    season: str
+    age_group: str
+
+class SetActiveRequest(BaseModel):
+    coach_id: int
 
 # 2. Authentication API routes
 @app.post("/api/auth/register")
@@ -73,3 +82,30 @@ def api_chat(data: ChatRequest):
         "answer": result["answer"],
         "sources": [doc.metadata.get("source", "Unknown").split('/')[-1] for doc in result.get("source_documents", [])]
     }
+
+# 4. Team Management API Routes
+@app.post("/api/teams")
+def api_create_team(data: TeamRequest):
+    try:
+        new_team = create_team(data.coach_id, data.team_name, data.season, data.age_group)
+        return new_team
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@app.get("api/teams/{coach_id}")
+def api_get_teams(coach_id: int):
+    try:
+        teams = get_coach_teams(coach_id)
+        return teams
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@app.post("api/teams/{team_id}/active")
+def api_set_active(team_id: int, data: SetActiveRequest):
+    try:
+        updated_team = set_active_team(data.coach_id, team_id)
+        if not updated_team:
+            raise HTTPException(status_code=404, detail="Team not found or unauthorized.")
+        return updated_team
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
