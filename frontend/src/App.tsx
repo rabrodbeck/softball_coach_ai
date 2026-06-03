@@ -1,15 +1,21 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import AuthPortal from './components/AuthPortal';
 import SideBar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
-import TeamManager from './components/TeamManager'; // Added TeamManager import
-import { Trophy, Menu, Users } from 'lucide-react'; // Added Users icon
+import TeamManager from './components/TeamManager';
+import { Trophy, Menu, Users } from 'lucide-react';
 
 export interface CoachProfile {
-  id: number; // Ensure id is defined in the profile
+  id: number;
   username: string;
   coach_name: string;
   location: string;
+  age_group: string;
+}
+
+interface SelectedTeam {
+  id: number;
+  team_name: string;
   age_group: string;
 }
 
@@ -19,20 +25,35 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showTeamManager, setShowTeamManager] = useState(false);
   
-  // Dynamic Team Info loaded from the TeamManager
-  const [activeTeamName, setActiveTeamName] = useState('');
-  const [activeAgeGroup, setActiveAgeGroup] = useState('');
+  // Selected Team tracked in browser session state
+  const [selectedTeam, setSelectedTeam] = useState<SelectedTeam | null>(null);
+
+  // Load selected team from localStorage on boot
+  useEffect(() => {
+    if (user) {
+      const cached = localStorage.getItem(`selected_team_${user.id}`);
+      if (cached) {
+        try {
+          setSelectedTeam(JSON.parse(cached));
+        } catch (e) {
+          console.error("Error parsing selected team cache:", e);
+        }
+      }
+    }
+  }, [user]);
 
   const handleLogOut = () => {
     setUser(null);
     setIsGuest(false);
-    setActiveTeamName('');
-    setActiveAgeGroup('');
+    setSelectedTeam(null);
   };
 
-  const handleActiveTeamChanged = (teamName: string, ageGroup: string) => {
-    setActiveTeamName(teamName);
-    setActiveAgeGroup(ageGroup);
+  const handleSelectTeam = (team: { id: number; team_name: string; age_group: string }) => {
+    const selected = { id: team.id, team_name: team.team_name, age_group: team.age_group };
+    setSelectedTeam(selected);
+    if (user) {
+      localStorage.setItem(`selected_team_${user.id}`, JSON.stringify(selected));
+    }
   };
 
   if (!user && !isGuest) {
@@ -43,6 +64,9 @@ function App() {
       />
     );
   }
+
+  // Determine current division to view
+  const currentAgeGroup = selectedTeam ? selectedTeam.age_group : (user?.age_group || '8U Division');
 
   return (
     <div className='app-container'>
@@ -67,7 +91,7 @@ function App() {
               style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold' }}
             >
               <Users size={16} />
-              {activeTeamName ? `${activeTeamName} (${activeAgeGroup.split(' ')[0]})` : "Manage Teams"}
+              {selectedTeam ? `${selectedTeam.team_name} (${selectedTeam.age_group.split(' ')[0]})` : "Manage Teams"}
             </button>
           )}
           <span>{user ? `Coach ${user.coach_name}` : 'Guest Dugout'}</span>
@@ -78,11 +102,11 @@ function App() {
       {/* Main workspace split into sidebar and chat */}
       <div className={`workspace ${sidebarOpen ? 'sidebar-open' : 'sidebar-collapsed'}`}>
         <SideBar
-          currentDivision={activeAgeGroup || user?.age_group || '8U Division'}
+          currentDivision={currentAgeGroup}
           isGuest={isGuest}
         />
         <main className='whiteboard-area'>
-          <ChatArea userProfile={user ? { ...user, age_group: activeAgeGroup || user.age_group } : null} />
+          <ChatArea userProfile={user ? { ...user, age_group: currentAgeGroup } : null} />
         </main>
       </div>
 
@@ -91,7 +115,8 @@ function App() {
         <TeamManager 
           coachId={user.id} 
           onClose={() => setShowTeamManager(false)}
-          onActiveTeamChanged={handleActiveTeamChanged}
+          selectedTeamId={selectedTeam ? selectedTeam.id : null}
+          onSelectTeam={handleSelectTeam}
         />
       )}
     </div>
