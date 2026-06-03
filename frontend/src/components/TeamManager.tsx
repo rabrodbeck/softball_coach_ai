@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Users, X, Trophy, Pencil } from 'lucide-react';
+import { Plus, Users, X, Trophy, Pencil, Trash2 } from 'lucide-react';
 
 interface Team {
     id: number;
@@ -12,6 +12,33 @@ interface Team {
     age_group: string;
 }
 
+interface Player {
+    id: number;
+    team_id: number;
+    player_name: string;
+    player_number: number;
+    handedness: string;
+    games_played: number;
+    plate_appearances: number;
+    at_bats: number;
+    hits: number; // Derived
+    singles: number;
+    doubles: number;
+    triples: number;
+    home_runs: number;
+    walks: number;
+    strikeouts: number;
+    hit_by_pitches: number;
+    stolen_bases: number;
+    caught_stealing: number;
+    runs_scored: number;
+    runs_batted_in: number;
+    batting_average: number; // Derived
+    on_base_percentage: number; // Derived
+    created_at: string;
+    updated_at: string;
+}
+
 interface TeamManagerProps {
     coachId: number;
     onClose: () => void;
@@ -20,12 +47,18 @@ interface TeamManagerProps {
 }
 
 export default function TeamManager({ coachId, onClose, selectedTeamId, onSelectTeam }: TeamManagerProps) {
+    const [activeTab, setActiveTab] = useState<'teams' | 'roster'>('teams');
     const [teams, setTeams] = useState<Team[]>([]);
+    const [roster, setRoster] = useState<Player[]>([]);
     const [loading, setLoading] = useState(false);
+    
+    // Forms state toggles
     const [showAddForm, setShowAddForm] = useState(false);
     const [editingTeam, setEditingTeam] = useState<Team | null>(null);
-    
-    // Form fields
+    const [showAddPlayerForm, setShowAddPlayerForm] = useState(false);
+    const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
+
+    // Team form inputs
     const [teamName, setTeamName] = useState('');
     const [season, setSeason] = useState('Spring 2026');
     const [ageGroup, setAgeGroup] = useState('12U Division');
@@ -33,6 +66,25 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
     const [losses, setLosses] = useState(0);
     const [ties, setTies] = useState(0);
     const [isActive, setIsActive] = useState(false);
+
+    // Player form inputs
+    const [playerName, setPlayerName] = useState('');
+    const [playerNumber, setPlayerNumber] = useState(0);
+    const [handedness, setHandedness] = useState('Righty');
+    const [gp, setGp] = useState(0);
+    const [pa, setPa] = useState(0);
+    const [ab, setAb] = useState(0);
+    const [singles, setSingles] = useState(0);
+    const [doubles, setDoubles] = useState(0);
+    const [triples, setTriples] = useState(0);
+    const [hr, setHr] = useState(0);
+    const [bb, setBb] = useState(0);
+    const [k, setK] = useState(0);
+    const [hbp, setHbp] = useState(0);
+    const [sb, setSb] = useState(0);
+    const [cs, setCs] = useState(0);
+    const [runsScored, setRunsScored] = useState(0);
+    const [rbi, setRbi] = useState(0);
 
     const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -44,14 +96,12 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                 const data = await response.json();
                 setTeams(data);
                 
-                // If there is a selected team, update its values from the database load
                 if (selectedTeamId) {
                     const currentSelected = data.find((t: Team) => t.id === selectedTeamId);
                     if (currentSelected) {
                         onSelectTeam(currentSelected);
                     }
                 } else {
-                    // Default to the first active team found if none is selected yet
                     const defaultActive = data.find((t: Team) => t.is_active);
                     if (defaultActive) {
                         onSelectTeam(defaultActive);
@@ -65,26 +115,41 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
         }
     };
 
+    const fetchRoster = async () => {
+        if (!selectedTeamId) return;
+        setLoading(true);
+        try {
+            const response = await fetch(`${API_BASE}/api/roster/${selectedTeamId}`);
+            if (response.ok) {
+                const data = await response.json();
+                setRoster(data);
+            }
+        } catch (err) {
+            console.error("Error fetching roster:", err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
         fetchTeams();
     }, [coachId]);
 
+    useEffect(() => {
+        if (activeTab === 'roster') {
+            fetchRoster();
+        }
+    }, [activeTab, selectedTeamId]);
+
     const handleCreateTeam = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!teamName.trim()) return;
-
         try {
             const response = await fetch(`${API_BASE}/api/teams`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    coach_id: coachId,
-                    team_name: teamName,
-                    season: season,
-                    age_group: ageGroup
-                })
+                body: JSON.stringify({ coach_id: coachId, team_name: teamName, season: season, age_group: ageGroup })
             });
-
             if (response.ok) {
                 setTeamName('');
                 setShowAddForm(false);
@@ -95,8 +160,8 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
         }
     };
 
-    const startEditing = (team: Team, e: React.MouseEvent) => {
-        e.stopPropagation(); // Prevents selection trigger
+    const startEditingTeam = (team: Team, e: React.MouseEvent) => {
+        e.stopPropagation();
         setEditingTeam(team);
         setTeamName(team.team_name);
         setSeason(team.season);
@@ -110,23 +175,12 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
     const handleUpdateTeam = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!editingTeam || !teamName.trim()) return;
-
         try {
             const response = await fetch(`${API_BASE}/api/teams/${editingTeam.id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    coach_id: coachId,
-                    team_name: teamName,
-                    season: season,
-                    wins: wins,
-                    losses: losses,
-                    ties: ties,
-                    age_group: ageGroup,
-                    is_active: isActive
-                })
+                body: JSON.stringify({ coach_id: coachId, team_name: teamName, season: season, wins: wins, losses: losses, ties: ties, age_group: ageGroup, is_active: isActive })
             });
-
             if (response.ok) {
                 setEditingTeam(null);
                 setTeamName('');
@@ -137,288 +191,310 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
         }
     };
 
+    const handleCreatePlayer = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!playerName.trim() || !selectedTeamId) return;
+        try {
+            const response = await fetch(`${API_BASE}/api/roster`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ team_id: selectedTeamId, player_name: playerName, player_number: playerNumber, handedness: handedness })
+            });
+            if (response.ok) {
+                setPlayerName('');
+                setPlayerNumber(0);
+                setShowAddPlayerForm(false);
+                fetchRoster();
+            }
+        } catch (err) {
+            console.error("Error creating player:", err);
+        }
+    };
+
+    const startEditingPlayer = (player: Player) => {
+        setEditingPlayer(player);
+        setPlayerName(player.player_name);
+        setPlayerNumber(player.player_number);
+        setHandedness(player.handedness);
+        setGp(player.games_played);
+        setPa(player.plate_appearances);
+        setAb(player.at_bats);
+        setSingles(player.singles);
+        setDoubles(player.doubles);
+        setTriples(player.triples);
+        setHr(player.home_runs);
+        setBb(player.walks);
+        setK(player.strikeouts);
+        setHbp(player.hit_by_pitches);
+        setSb(player.stolen_bases);
+        setCs(player.caught_stealing);
+        setRunsScored(player.runs_scored || 0);
+        setRbi(player.runs_batted_in || 0);
+    };
+
+    const handleUpdatePlayer = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingPlayer || !playerName.trim()) return;
+        try {
+            const response = await fetch(`${API_BASE}/api/roster/${editingPlayer.id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    player_name: playerName, player_number: playerNumber, handedness: handedness,
+                    games_played: gp, plate_appearances: pa, at_bats: ab,
+                    singles: singles, doubles: doubles, triples: triples, home_runs: hr,
+                    walks: bb, strikeouts: k, hit_by_pitches: hbp,
+                    stolen_bases: sb, caught_stealing: cs,
+                    runs_scored: runsScored, runs_batted_in: rbi
+                })
+            });
+            if (response.ok) {
+                setEditingPlayer(null);
+                setPlayerName('');
+                fetchRoster();
+            }
+        } catch (err) {
+            console.error("Error updating player:", err);
+        }
+    };
+
+    const handleDeletePlayer = async (playerId: number) => {
+        if (!window.confirm("Are you sure you want to remove this player from the team?")) return;
+        try {
+            const response = await fetch(`${API_BASE}/api/roster/${playerId}`, { method: "DELETE" });
+            if (response.ok) {
+                fetchRoster();
+            }
+        } catch (err) {
+            console.error("Error deleting player:", err);
+        }
+    };
+
     const cancelForms = () => {
         setShowAddForm(false);
         setEditingTeam(null);
+        setShowAddPlayerForm(false);
+        setEditingPlayer(null);
         setTeamName('');
+        setPlayerName('');
     };
 
     return (
         <div className="modal-overlay">
-            <div className="team-manager-card">
+            <div className="team-manager-card" style={{ width: activeTab === 'roster' ? '920px' : '550px', transition: 'width 0.2s ease-out' }}>
                 <div className="team-manager-header">
                     <div className="title-area">
                         <Users className="icon-sidebar" />
-                        <h2>Roster & Team Manager</h2>
+                        <h2>Team Workspace Manager</h2>
                     </div>
                     <button onClick={onClose} className="btn-close-modal"><X size={20} /></button>
                 </div>
 
-                {showAddForm ? (
-                    <form onSubmit={handleCreateTeam} className="add-team-form">
-                        <h3>Create New Team</h3>
-                        <div className="input-group">
-                            <label>Team Name</label>
-                            <input 
-                                type="text" 
-                                value={teamName}
-                                onChange={(e) => setTeamName(e.target.value)}
-                                placeholder="Lady Hawks"
-                                required
-                            />
-                        </div>
-                        <div className="form-row-double" style={{ display: 'flex', gap: '12px' }}>
-                            <div className="input-group" style={{ flex: 1 }}>
-                                <label>Season</label>
-                                <input 
-                                    type="text" 
-                                    value={season}
-                                    onChange={(e) => setSeason(e.target.value)}
-                                    placeholder="Spring 2026"
-                                    required
-                                />
-                            </div>
-                            <div className="input-group" style={{ flex: 1 }}>
-                                <label>Age Group</label>
-                                <select 
-                                    value={ageGroup} 
-                                    onChange={(e) => setAgeGroup(e.target.value)}
-                                    style={{ padding: '12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)' }}
-                                >
-                                    <option value="8U Division">8U Division</option>
-                                    <option value="10U Division">10U Division</option>
-                                    <option value="12U Division">12U Division</option>
-                                    <option value="14U Division">14U Division</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div className="form-actions" style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
-                            <button type="submit" className="btn-primary" style={{ flex: 1 }}>Create Team</button>
-                            <button type="button" onClick={cancelForms} className="btn-secondary" style={{ flex: 1 }}>Cancel</button>
-                        </div>
-                    </form>
-                ) : editingTeam ? (
-                    <form onSubmit={handleUpdateTeam} className="add-team-form">
-                        <h3>Edit Team Details</h3>
-                        <div className="input-group">
-                            <label>Team Name</label>
-                            <input 
-                                type="text" 
-                                value={teamName}
-                                onChange={(e) => setTeamName(e.target.value)}
-                                required
-                            />
-                        </div>
-                        <div className="form-row-double" style={{ display: 'flex', gap: '12px' }}>
-                            <div className="input-group" style={{ flex: 1 }}>
-                                <label>Season</label>
-                                <input 
-                                    type="text" 
-                                    value={season}
-                                    onChange={(e) => setSeason(e.target.value)}
-                                    required
-                                />
-                            </div>
-                            <div className="input-group" style={{ flex: 1 }}>
-                                <label>Age Group</label>
-                                <select 
-                                    value={ageGroup} 
-                                    onChange={(e) => setAgeGroup(e.target.value)}
-                                    style={{ padding: '12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)' }}
-                                >
-                                    <option value="8U Division">8U Division</option>
-                                    <option value="10U Division">10U Division</option>
-                                    <option value="12U Division">12U Division</option>
-                                    <option value="14U Division">14U Division</option>
-                                </select>
-                            </div>
-                        </div>
+                {/* Tab Switcher */}
+                <div className="tab-menu" style={{ display: 'flex', gap: '8px', marginBottom: '20px', borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
+                    <button 
+                        onClick={() => { setActiveTab('teams'); cancelForms(); }} 
+                        className={`tab-btn ${activeTab === 'teams' ? 'active' : ''}`}
+                        style={{ padding: '8px 16px', background: activeTab === 'teams' ? 'var(--accent-bg)' : 'transparent', border: 'none', color: activeTab === 'teams' ? 'var(--accent)' : 'var(--text)', cursor: 'pointer', borderRadius: '6px', fontWeight: 'bold' }}
+                    >
+                        Teams List
+                    </button>
+                    <button 
+                        onClick={() => { setActiveTab('roster'); cancelForms(); }} 
+                        disabled={!selectedTeamId}
+                        className={`tab-btn ${activeTab === 'roster' ? 'active' : ''}`}
+                        style={{ padding: '8px 16px', background: activeTab === 'roster' ? 'var(--accent-bg)' : 'transparent', border: 'none', color: activeTab === 'roster' ? 'var(--accent)' : 'var(--text)', cursor: 'pointer', borderRadius: '6px', fontWeight: 'bold', opacity: selectedTeamId ? 1 : 0.4 }}
+                    >
+                        Active Roster
+                    </button>
+                </div>
 
-                        {/* W-L-T Record Stats Fields */}
-                        <div className="stats-row" style={{ display: 'flex', gap: '12px' }}>
-                            <div className="input-group" style={{ flex: 1 }}>
-                                <label style={{ color: '#22c55e' }}>Wins</label>
-                                <input 
-                                    type="number" 
-                                    min="0"
-                                    value={wins}
-                                    onChange={(e) => setWins(parseInt(e.target.value) || 0)}
-                                    required
-                                />
+                {activeTab === 'teams' ? (
+                    /* TEAMS VIEW TAB */
+                    showAddForm ? (
+                        <form onSubmit={handleCreateTeam} className="add-team-form">
+                            <h3>Create New Team</h3>
+                            <div className="input-group">
+                                <label>Team Name</label>
+                                <input type="text" value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder="Lady Hawks" required />
                             </div>
-                            <div className="input-group" style={{ flex: 1 }}>
-                                <label style={{ color: '#ef4444' }}>Losses</label>
-                                <input 
-                                    type="number" 
-                                    min="0"
-                                    value={losses}
-                                    onChange={(e) => setLosses(parseInt(e.target.value) || 0)}
-                                    required
-                                />
+                            <div className="form-row-double" style={{ display: 'flex', gap: '12px' }}>
+                                <div className="input-group" style={{ flex: 1 }}><label>Season</label><input type="text" value={season} onChange={(e) => setSeason(e.target.value)} required /></div>
+                                <div className="input-group" style={{ flex: 1 }}><label>Age Group</label><select value={ageGroup} onChange={(e) => setAgeGroup(e.target.value)} style={{ padding: '12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)' }}><option value="8U Division">8U Division</option><option value="10U Division">10U Division</option><option value="12U Division">12U Division</option><option value="14U Division">14U Division</option></select></div>
                             </div>
-                            <div className="input-group" style={{ flex: 1 }}>
-                                <label style={{ color: '#94a3b8' }}>Ties</label>
-                                <input 
-                                    type="number" 
-                                    min="0"
-                                    value={ties}
-                                    onChange={(e) => setTies(parseInt(e.target.value) || 0)}
-                                    required
-                                />
+                            <div className="form-actions" style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+                                <button type="submit" className="btn-primary" style={{ flex: 1 }}>Create Team</button>
+                                <button type="button" onClick={cancelForms} className="btn-secondary" style={{ flex: 1 }}>Cancel</button>
                             </div>
-                        </div>
-
-                        {/* Active Checkbox */}
-                        <div className="active-checkbox-group" style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '8px 0' }}>
-                            <input 
-                                type="checkbox" 
-                                id="active-checkbox"
-                                checked={isActive}
-                                onChange={(e) => setIsActive(e.target.checked)}
-                                style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                            />
-                            <label htmlFor="active-checkbox" style={{ fontSize: '14px', cursor: 'pointer', fontWeight: 'bold' }}>
-                                Active Team this Season
-                            </label>
-                        </div>
-
-                        <div className="form-actions" style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
-                            <button type="submit" className="btn-primary" style={{ flex: 1 }}>Save Changes</button>
-                            <button type="button" onClick={cancelForms} className="btn-secondary" style={{ flex: 1 }}>Cancel</button>
-                        </div>
-                    </form>
-                ) : (
-                    <div className="teams-list-area">
-                        <div className="list-subheader" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                            <span style={{ fontSize: '14px', color: 'var(--text)' }}>Select or edit a team below</span>
-                            <button onClick={() => setShowAddForm(true)} className="btn-add-team">
-                                <Plus size={16} /> Add Team
-                            </button>
-                        </div>
-
-                        {loading && teams.length === 0 ? (
-                            <div style={{ padding: '24px', textAlign: 'center' }}>Loading teams...</div>
-                        ) : teams.length === 0 ? (
-                            <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text)' }}>
-                                📋 No teams registered yet. Click \"Add Team\" to get started!
+                        </form>
+                    ) : editingTeam ? (
+                        <form onSubmit={handleUpdateTeam} className="add-team-form">
+                            <h3>Edit Team Details</h3>
+                            <div className="input-group"><label>Team Name</label><input type="text" value={teamName} onChange={(e) => setTeamName(e.target.value)} required /></div>
+                            <div className="form-row-double" style={{ display: 'flex', gap: '12px' }}>
+                                <div className="input-group" style={{ flex: 1 }}><label>Season</label><input type="text" value={season} onChange={(e) => setSeason(e.target.value)} required /></div>
+                                <div className="input-group" style={{ flex: 1 }}><label>Age Group</label><select value={ageGroup} onChange={(e) => setAgeGroup(e.target.value)} style={{ padding: '12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)' }}><option value="8U Division">8U Division</option><option value="10U Division">10U Division</option><option value="12U Division">12U Division</option><option value="14U Division">14U Division</option></select></div>
                             </div>
-                        ) : (
+                            <div className="stats-row" style={{ display: 'flex', gap: '12px' }}>
+                                <div className="input-group" style={{ flex: 1 }}><label style={{ color: '#22c55e' }}>Wins</label><input type="number" min="0" value={wins} onChange={(e) => setWins(parseInt(e.target.value) || 0)} required /></div>
+                                <div className="input-group" style={{ flex: 1 }}><label style={{ color: '#ef4444' }}>Losses</label><input type="number" min="0" value={losses} onChange={(e) => setLosses(parseInt(e.target.value) || 0)} required /></div>
+                                <div className="input-group" style={{ flex: 1 }}><label style={{ color: '#94a3b8' }}>Ties</label><input type="number" min="0" value={ties} onChange={(e) => setTies(parseInt(e.target.value) || 0)} required /></div>
+                            </div>
+                            <div className="active-checkbox-group" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><input type="checkbox" id="active-checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer' }} /><label htmlFor="active-checkbox" style={{ fontSize: '14px', cursor: 'pointer', fontWeight: 'bold' }}>Active Team this Season</label></div>
+                            <div className="form-actions" style={{ display: 'flex', gap: '12px', marginTop: '12px' }}><button type="submit" className="btn-primary" style={{ flex: 1 }}>Save Changes</button><button type="button" onClick={cancelForms} className="btn-secondary" style={{ flex: 1 }}>Cancel</button></div>
+                        </form>
+                    ) : (
+                        <div className="teams-list-area">
+                            <div className="list-subheader" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}><span style={{ fontSize: '14px', color: 'var(--text)' }}>Select or edit a team below</span><button onClick={() => setShowAddForm(true)} className="btn-add-team"><Plus size={16} /> Add Team</button></div>
                             <div className="teams-grid" style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '350px', overflowY: 'auto' }}>
                                 {teams.filter(t => t.is_active).map((t) => (
-                                    <div 
-                                        key={t.id} 
-                                        onClick={() => onSelectTeam(t)}
-                                        className={`team-card ${t.id === selectedTeamId ? 'active' : ''}`}
-                                        style={{
-                                            display: 'flex',
-                                            justifyContent: 'space-between',
-                                            alignItems: 'center',
-                                            padding: '16px',
-                                            borderRadius: '8px',
-                                            border: t.id === selectedTeamId ? '2px solid var(--accent)' : '1px solid var(--border)',
-                                            background: t.id === selectedTeamId ? 'var(--accent-bg)' : 'var(--bg)',
-                                            cursor: 'pointer',
-                                            transition: 'all 0.2s'
-                                        }}
-                                    >
-                                        <div className="team-card-info" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                                            <Trophy style={{ color: t.id === selectedTeamId ? 'var(--accent)' : 'var(--text)' }} size={20} />
-                                            <div>
-                                                <h4 style={{ margin: 0, color: 'var(--text-h)', fontWeight: '600' }}>{t.team_name}</h4>
-                                                <span style={{ fontSize: '12px', color: 'var(--text)' }}>{t.season} • {t.age_group}</span>
-                                            </div>
-                                        </div>
-                                        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                                            <div className="team-stats" style={{ display: 'flex', gap: '8px', fontSize: '13px', fontWeight: 'bold' }}>
-                                                <span style={{ color: '#22c55e' }}>{t.wins}W</span>
-                                                <span style={{ color: '#ef4444' }}>{t.losses}L</span>
-                                                <span style={{ color: '#94a3b8' }}>{t.ties}T</span>
-                                            </div>
-                                            <button 
-                                                onClick={(e) => startEditing(t, e)}
-                                                className="btn-edit-team-pencil"
-                                                style={{
-                                                    background: 'transparent',
-                                                    border: 'none',
-                                                    color: 'var(--text)',
-                                                    cursor: 'pointer',
-                                                    padding: '4px',
-                                                    borderRadius: '4px',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center',
-                                                    transition: 'all 0.2s'
-                                                }}
-                                                title="Edit Team Details"
-                                            >
-                                                <Pencil size={15} />
-                                            </button>
-                                        </div>
+                                    <div key={t.id} onClick={() => onSelectTeam(t)} className={`team-card ${t.id === selectedTeamId ? 'active' : ''}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', borderRadius: '8px', border: t.id === selectedTeamId ? '2px solid var(--accent)' : '1px solid var(--border)', background: t.id === selectedTeamId ? 'var(--accent-bg)' : 'var(--bg)', cursor: 'pointer' }}>
+                                        <div className="team-card-info" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}><Trophy style={{ color: t.id === selectedTeamId ? 'var(--accent)' : 'var(--text)' }} size={20} /><div><h4 style={{ margin: 0, color: 'var(--text-h)', fontWeight: '600' }}>{t.team_name}</h4><span style={{ fontSize: '12px', color: 'var(--text)' }}>{t.season} • {t.age_group}</span></div></div>
+                                        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}><div className="team-stats" style={{ display: 'flex', gap: '8px', fontSize: '13px', fontWeight: 'bold' }}><span style={{ color: '#22c55e' }}>{t.wins}W</span><span style={{ color: '#ef4444' }}>{t.losses}L</span><span style={{ color: '#94a3b8' }}>{t.ties}T</span></div><button onClick={(e) => startEditingTeam(t, e)} className="btn-edit-team-pencil" style={{ background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer', padding: '4px', borderRadius: '4px' }}><Pencil size={15} /></button></div>
                                     </div>
                                 ))}
                                 
-                                                                {/* Section for archived/inactive teams */}
                                 {teams.some(t => !t.is_active) && (
                                     <>
                                         <hr style={{ border: 'none', borderTop: '1px dashed var(--border)', margin: '8px 0' }} />
                                         <span style={{ fontSize: '12px', color: 'var(--text)', textAlign: 'left', fontWeight: 'bold' }}>Archived / Inactive Teams</span>
                                         {teams.filter(t => !t.is_active).map((t) => (
-                                            <div 
-                                                key={t.id} 
-                                                onClick={() => onSelectTeam(t)}
-                                                className={`team-card inactive ${t.id === selectedTeamId ? 'active' : ''}`}
-                                                style={{
-                                                    display: 'flex',
-                                                    justifyContent: 'space-between',
-                                                    alignItems: 'center',
-                                                    padding: '12px 16px',
-                                                    borderRadius: '8px',
-                                                    border: t.id === selectedTeamId ? '2px solid var(--accent)' : '1px solid var(--border)',
-                                                    background: t.id === selectedTeamId ? 'var(--accent-bg)' : 'rgba(0,0,0,0.1)',
-                                                    opacity: t.id === selectedTeamId ? 1 : 0.6,
-                                                    cursor: 'pointer',
-                                                    transition: 'all 0.2s'
-                                                }}
-                                            >
-                                                <div className="team-card-info" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                                                    <Users style={{ color: t.id === selectedTeamId ? 'var(--accent)' : 'var(--text)' }} size={20} />
-                                                    <div>
-                                                        <h4 style={{ margin: 0, color: 'var(--text-h)', fontWeight: t.id === selectedTeamId ? '600' : '500' }}>{t.team_name}</h4>
-                                                        <span style={{ fontSize: '11px', color: 'var(--text)' }}>{t.season} • {t.age_group}</span>
-                                                    </div>
-                                                </div>
-                                                <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                                                    <div className="team-stats" style={{ display: 'flex', gap: '8px', fontSize: '12px', fontWeight: t.id === selectedTeamId ? 'bold' : 'normal' }}>
-                                                        <span style={{ color: t.id === selectedTeamId ? '#22c55e' : 'inherit' }}>{t.wins}W</span>
-                                                        <span style={{ color: t.id === selectedTeamId ? '#ef4444' : 'inherit' }}>{t.losses}L</span>
-                                                        <span style={{ color: t.id === selectedTeamId ? '#94a3b8' : 'inherit' }}>{t.ties}T</span>
-                                                    </div>
-                                                    <button 
-                                                        onClick={(e) => startEditing(t, e)}
-                                                        className="btn-edit-team-pencil"
-                                                        style={{
-                                                            background: 'transparent',
-                                                            border: 'none',
-                                                            color: 'var(--text)',
-                                                            cursor: 'pointer',
-                                                            padding: '4px',
-                                                            borderRadius: '4px',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'center',
-                                                            transition: 'all 0.2s'
-                                                        }}
-                                                    >
-                                                        <Pencil size={15} />
-                                                    </button>
-                                                </div>
+                                            <div key={t.id} onClick={() => onSelectTeam(t)} className={`team-card inactive ${t.id === selectedTeamId ? 'active' : ''}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderRadius: '8px', border: t.id === selectedTeamId ? '2px solid var(--accent)' : '1px solid var(--border)', background: t.id === selectedTeamId ? 'var(--accent-bg)' : 'rgba(0,0,0,0.1)', opacity: t.id === selectedTeamId ? 1 : 0.6, cursor: 'pointer' }}>
+                                                <div className="team-card-info" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}><Users style={{ color: t.id === selectedTeamId ? 'var(--accent)' : 'var(--text)' }} size={20} /><div><h4 style={{ margin: 0, color: 'var(--text-h)', fontWeight: t.id === selectedTeamId ? '600' : '500' }}>{t.team_name}</h4><span style={{ fontSize: '11px', color: 'var(--text)' }}>{t.season} • {t.age_group}</span></div></div>
+                                                <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}><div className="team-stats" style={{ display: 'flex', gap: '8px', fontSize: '12px', fontWeight: t.id === selectedTeamId ? 'bold' : 'normal' }}><span style={{ color: t.id === selectedTeamId ? '#22c55e' : 'inherit' }}>{t.wins}W</span><span style={{ color: t.id === selectedTeamId ? '#ef4444' : 'inherit' }}>{t.losses}L</span><span style={{ color: t.id === selectedTeamId ? '#94a3b8' : 'inherit' }}>{t.ties}T</span></div><button onClick={(e) => startEditingTeam(t, e)} className="btn-edit-team-pencil" style={{ background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer', padding: '4px', borderRadius: '4px' }}><Pencil size={15} /></button></div>
                                             </div>
                                         ))}
                                     </>
                                 )}
                             </div>
-                        )}
-                    </div>
+                        </div>
+                    )
+                ) : (
+                    /* ROSTER VIEW TAB */
+                    showAddPlayerForm ? (
+                        <form onSubmit={handleCreatePlayer} className="add-team-form">
+                            <h3>Add Player to Roster</h3>
+                            <div className="input-group">
+                                <label>Player Name</label>
+                                <input type="text" value={playerName} onChange={(e) => setPlayerName(e.target.value)} placeholder="Sarah Jenkins" required />
+                            </div>
+                            <div className="form-row-double" style={{ display: 'flex', gap: '12px' }}>
+                                <div className="input-group" style={{ flex: 1 }}>
+                                    <label>Jersey Number</label>
+                                    <input type="number" min="0" max="99" value={playerNumber} onChange={(e) => setPlayerNumber(parseInt(e.target.value) || 0)} required />
+                                </div>
+                                <div className="input-group" style={{ flex: 1 }}>
+                                    <label>Handedness (Bats)</label>
+                                    <select value={handedness} onChange={(e) => setHandedness(e.target.value)} style={{ padding: '12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)' }}>
+                                        <option value="Righty">Righty</option>
+                                        <option value="Lefty">Lefty</option>
+                                        <option value="Switch">Switch</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="form-actions" style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+                                <button type="submit" className="btn-primary" style={{ flex: 1 }}>Add Player</button>
+                                <button type="button" onClick={cancelForms} className="btn-secondary" style={{ flex: 1 }}>Cancel</button>
+                            </div>
+                        </form>
+                    ) : editingPlayer ? (
+                        <form onSubmit={handleUpdatePlayer} className="add-team-form" style={{ maxHeight: '450px', overflowY: 'auto', paddingRight: '8px' }}>
+                            <h3>Edit Player & Stats</h3>
+                            <div className="form-row-double" style={{ display: 'flex', gap: '12px' }}>
+                                <div className="input-group" style={{ flex: 2 }}><label>Player Name</label><input type="text" value={playerName} onChange={(e) => setPlayerName(e.target.value)} required /></div>
+                                <div className="input-group" style={{ flex: 1 }}><label>Number</label><input type="number" value={playerNumber} onChange={(e) => setPlayerNumber(parseInt(e.target.value) || 0)} required /></div>
+                                <div className="input-group" style={{ flex: 1 }}><label>Bats</label><select value={handedness} onChange={(e) => setHandedness(e.target.value)} style={{ padding: '12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)' }}><option value="Righty">Righty</option><option value="Lefty">Lefty</option><option value="Switch">Switch</option></select></div>
+                            </div>
+                            
+                            {/* Raw Counts Fields (Grid of stats) */}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', borderTop: '1px dashed var(--border)', paddingTop: '12px' }}>
+                                <div className="input-group"><label>Games (GP)</label><input type="number" value={gp} onChange={(e) => setGp(parseInt(e.target.value) || 0)} /></div>
+                                <div className="input-group"><label>Plate App. (PA)</label><input type="number" value={pa} onChange={(e) => setPa(parseInt(e.target.value) || 0)} /></div>
+                                <div className="input-group"><label>At Bats (AB)</label><input type="number" value={ab} onChange={(e) => setAb(parseInt(e.target.value) || 0)} /></div>
+                                <div className="input-group"><label>Runs Scored (R)</label><input type="number" value={runsScored} onChange={(e) => setRunsScored(parseInt(e.target.value) || 0)} /></div>
+                                <div className="input-group"><label>Runs Batted In (RBI)</label><input type="number" value={rbi} onChange={(e) => setRbi(parseInt(e.target.value) || 0)} /></div>
+                                <div className="input-group"><label>Singles (1B)</label><input type="number" value={singles} onChange={(e) => setSingles(parseInt(e.target.value) || 0)} /></div>
+                                <div className="input-group"><label>Doubles (2B)</label><input type="number" value={doubles} onChange={(e) => setDoubles(parseInt(e.target.value) || 0)} /></div>
+                                <div className="input-group"><label>Triples (3B)</label><input type="number" value={triples} onChange={(e) => setTriples(parseInt(e.target.value) || 0)} /></div>
+                                <div className="input-group"><label>Home Runs (HR)</label><input type="number" value={hr} onChange={(e) => setHr(parseInt(e.target.value) || 0)} /></div>
+                                <div className="input-group"><label>Walks (BB)</label><input type="number" value={bb} onChange={(e) => setBb(parseInt(e.target.value) || 0)} /></div>
+                                <div className="input-group"><label>Strikeouts (K)</label><input type="number" value={k} onChange={(e) => setK(parseInt(e.target.value) || 0)} /></div>
+                                <div className="input-group"><label>Hit By Pitch (HBP)</label><input type="number" value={hbp} onChange={(e) => setHbp(parseInt(e.target.value) || 0)} /></div>
+                                <div className="input-group"><label>Stolen Bases (SB)</label><input type="number" value={sb} onChange={(e) => setSb(parseInt(e.target.value) || 0)} /></div>
+                                <div className="input-group"><label>Caught Stealing</label><input type="number" value={cs} onChange={(e) => setCs(parseInt(e.target.value) || 0)} /></div>
+                            </div>
+                            
+                            <div className="form-actions" style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+                                <button type="submit" className="btn-primary" style={{ flex: 1 }}>Save Stats</button>
+                                <button type="button" onClick={cancelForms} className="btn-secondary" style={{ flex: 1 }}>Cancel</button>
+                            </div>
+                        </form>
+                    ) : (
+                        <div className="roster-list-area">
+                            <div className="list-subheader" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                <h3 style={{ margin: 0, fontSize: '16px', color: 'var(--text-h)' }}>Team Roster</h3>
+                                <button onClick={() => setShowAddPlayerForm(true)} className="btn-add-team">
+                                    <Plus size={16} /> Add Player
+                                </button>
+                            </div>
+
+                            {loading && roster.length === 0 ? (
+                                <div style={{ padding: '24px', textAlign: 'center' }}>Loading roster...</div>
+                            ) : roster.length === 0 ? (
+                                <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text)' }}>
+                                    📋 No players added to the roster yet. Add your first player!
+                                </div>
+                            ) : (
+                                <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: '8px' }}>
+                                    <table className="roster-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', textAlign: 'left' }}>
+                                        <thead>
+                                            <tr style={{ background: 'var(--code-bg)', borderBottom: '1px solid var(--border)' }}>
+                                                <th style={{ padding: '10px 12px' }}>#</th>
+                                                <th style={{ padding: '10px 12px' }}>Player Name</th>
+                                                <th style={{ padding: '10px 12px' }}>Bats</th>
+                                                <th style={{ padding: '10px 12px' }}>GP</th>
+                                                <th style={{ padding: '10px 12px' }}>R</th>
+                                                <th style={{ padding: '10px 12px' }}>RBI</th>
+                                                <th style={{ padding: '10px 12px' }}>H</th>
+                                                <th style={{ padding: '10px 12px' }}>AB</th>
+                                                <th style={{ padding: '10px 12px' }}>AVG</th>
+                                                <th style={{ padding: '10px 12px' }}>OBP</th>
+                                                <th style={{ padding: '10px 12px', textAlign: 'center' }}>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {roster.map((p) => (
+                                                <tr key={p.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                                                    <td style={{ padding: '10px 12px', fontWeight: 'bold' }}>{p.player_number}</td>
+                                                    <td style={{ padding: '10px 12px', color: 'var(--text-h)', fontWeight: '500' }}>{p.player_name}</td>
+                                                    <td style={{ padding: '10px 12px' }}>{p.handedness[0]}</td>
+                                                    <td style={{ padding: '10px 12px' }}>{p.games_played}</td>
+                                                    <td style={{ padding: '10px 12px' }}>{p.runs_scored}</td>
+                                                    <td style={{ padding: '10px 12px' }}>{p.runs_batted_in}</td>
+                                                    <td style={{ padding: '10px 12px', fontWeight: 'bold' }}>{p.hits}</td>
+                                                    <td style={{ padding: '10px 12px' }}>{p.at_bats}</td>
+                                                    <td style={{ padding: '10px 12px', color: 'var(--accent)', fontWeight: 'bold' }}>
+                                                        {p.batting_average.toFixed(3).replace(/^0+/, '')}
+                                                    </td>
+                                                    <td style={{ padding: '10px 12px', color: 'var(--accent)', fontWeight: 'bold' }}>
+                                                        {p.on_base_percentage.toFixed(3).replace(/^0+/, '')}
+                                                    </td>
+                                                    <td style={{ padding: '10px 12px', display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
+                                                        <button onClick={() => startEditingPlayer(p)} className="btn-edit-team-pencil" style={{ background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer', padding: '4px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center' }}>
+                                                            <Pencil size={14} />
+                                                        </button>
+                                                        <button onClick={() => handleDeletePlayer(p.id)} className="btn-delete-player" style={{ background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer', padding: '4px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center' }}>
+                                                            <Trash2 size={14} style={{ color: '#ef4444' }} />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                    )
                 )}
             </div>
         </div>

@@ -671,3 +671,55 @@ code {
   transform: translateY(-2px);
   box-shadow: var(--shadow);
 }
+
+/* Roster and Tab Switcher Styles */
+.tab-menu {
+  border-bottom: 1px solid var(--border);
+}
+
+.tab-btn {
+  font-family: var(--heading);
+  font-size: 14px;
+  transition: all 0.2s ease-in-out;
+}
+
+.tab-btn:hover:not(:disabled) {
+  background: var(--border) !important;
+  color: var(--text-h) !important;
+}
+
+.tab-btn.active {
+  border-bottom: 2px solid var(--accent);
+}
+
+/* Roster Table Styling */
+.roster-table th {
+  color: var(--text-h);
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+
+.roster-table td {
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.roster-table tr:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+@media (prefers-color-scheme: dark) {
+  .roster-table tr:hover {
+    background: rgba(255, 255, 255, 0.02);
+  }
+}
+
+.btn-delete-player:hover {
+  background: rgba(239, 68, 68, 0.1) !important;
+}
+
+.btn-edit-team-pencil:hover {
+  background: var(--border) !important;
+  color: var(--text-h) !important;
+}
