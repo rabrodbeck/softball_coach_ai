@@ -85,7 +85,38 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
     const [cs, setCs] = useState(0);
     const [runsScored, setRunsScored] = useState(0);
     const [rbi, setRbi] = useState(0);
-
+    // Sorting State
+    const [sortField, setSortField] = useState<keyof Player | null>(null);
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+    const handleSort = (field: keyof Player) => {
+        if (sortField === field) {
+            // Toggle direction if clicking the same field
+            setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+        } else {
+            // Default to descending order on first click of a new column
+            setSortField(field);
+            setSortDirection('desc');
+        }
+    };
+    // Derived sorted roster list
+    const sortedRoster = React.useMemo(() => {
+        if (!sortField) return roster;
+        return [...roster].sort((a, b) => {
+            const aVal = a[sortField];
+            const bVal = b[sortField];
+            
+            if (typeof aVal === 'string' && typeof bVal === 'string') {
+                return sortDirection === 'asc' 
+                    ? aVal.localeCompare(bVal) 
+                    : bVal.localeCompare(aVal);
+            }
+            
+            // Numerical sort for raw stats & derived stats
+            const aNum = Number(aVal) || 0;
+            const bNum = Number(bVal) || 0;
+            return sortDirection === 'asc' ? aNum - bNum : bNum - aNum;
+        });
+    }, [roster, sortField, sortDirection]);
     const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
     const fetchTeams = async () => {
@@ -281,7 +312,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
 
     return (
         <div className="modal-overlay">
-            <div className="team-manager-card" style={{ width: activeTab === 'roster' ? '920px' : '550px', transition: 'width 0.2s ease-out' }}>
+            <div className="team-manager-card" style={{ width: activeTab === 'roster' ? '1050px' : '550px', transition: 'width 0.2s ease-out' }}>
                 <div className="team-manager-header">
                     <div className="title-area">
                         <Users className="icon-sidebar" />
@@ -373,7 +404,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                     /* ROSTER VIEW TAB */
                     showAddPlayerForm ? (
                         <form onSubmit={handleCreatePlayer} className="add-team-form">
-                            <h3>Add Player to Roster</h3>
+                            <h3>Add Player to {teams.find(t => t.id === selectedTeamId)?.team_name || 'Roster'}</h3>
                             <div className="input-group">
                                 <label>Player Name</label>
                                 <input type="text" value={playerName} onChange={(e) => setPlayerName(e.target.value)} placeholder="Sarah Jenkins" required />
@@ -432,7 +463,9 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                     ) : (
                         <div className="roster-list-area">
                             <div className="list-subheader" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                                <h3 style={{ margin: 0, fontSize: '16px', color: 'var(--text-h)' }}>Team Roster</h3>
+                                <h3 style={{ margin: 0, fontSize: '16px', color: 'var(--text-h)' }}>
+                                    Team Roster {selectedTeamId && ` - ${teams.find(t => t.id === selectedTeamId)?.team_name}`}
+                                </h3>
                                 <button onClick={() => setShowAddPlayerForm(true)} className="btn-add-team">
                                     <Plus size={16} /> Add Player
                                 </button>
@@ -449,30 +482,66 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                     <table className="roster-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', textAlign: 'left' }}>
                                         <thead>
                                             <tr style={{ background: 'var(--code-bg)', borderBottom: '1px solid var(--border)' }}>
-                                                <th style={{ padding: '10px 12px' }}>#</th>
-                                                <th style={{ padding: '10px 12px' }}>Player Name</th>
-                                                <th style={{ padding: '10px 12px' }}>Bats</th>
-                                                <th style={{ padding: '10px 12px' }}>GP</th>
-                                                <th style={{ padding: '10px 12px' }}>R</th>
-                                                <th style={{ padding: '10px 12px' }}>RBI</th>
-                                                <th style={{ padding: '10px 12px' }}>H</th>
-                                                <th style={{ padding: '10px 12px' }}>AB</th>
-                                                <th style={{ padding: '10px 12px' }}>AVG</th>
-                                                <th style={{ padding: '10px 12px' }}>OBP</th>
-                                                <th style={{ padding: '10px 12px', textAlign: 'center' }}>Actions</th>
+                                                <th onClick={() => handleSort('player_number')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                    # {sortField === 'player_number' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                </th>
+                                                <th onClick={() => handleSort('player_name')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                    Player Name {sortField === 'player_name' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                </th>
+                                                <th onClick={() => handleSort('handedness')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                    Bats {sortField === 'handedness' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                </th>
+                                                <th onClick={() => handleSort('games_played')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                    GP {sortField === 'games_played' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                </th>
+                                                <th onClick={() => handleSort('plate_appearances')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                    PA {sortField === 'plate_appearances' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                </th>
+                                                <th onClick={() => handleSort('at_bats')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                    AB {sortField === 'at_bats' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                </th>
+                                                <th onClick={() => handleSort('hits')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                    H {sortField === 'hits' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                </th>
+                                                <th onClick={() => handleSort('walks')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                    BB {sortField === 'walks' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                </th>
+                                                <th onClick={() => handleSort('strikeouts')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                    K {sortField === 'strikeouts' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                </th>
+                                                <th onClick={() => handleSort('runs_scored')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                    R {sortField === 'runs_scored' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                </th>
+                                                <th onClick={() => handleSort('runs_batted_in')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                    RBI {sortField === 'runs_batted_in' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                </th>
+                                                <th onClick={() => handleSort('stolen_bases')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                    SB {sortField === 'stolen_bases' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                </th>
+                                                <th onClick={() => handleSort('batting_average')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                    AVG {sortField === 'batting_average' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                </th>
+                                                <th onClick={() => handleSort('on_base_percentage')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                    OBP {sortField === 'on_base_percentage' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                </th>
+                                                <th style={{ padding: '10px 12px', textAlign: 'center', userSelect: 'none' }}>Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {roster.map((p) => (
+                                            {sortedRoster.map((p) => (
                                                 <tr key={p.id} style={{ borderBottom: '1px solid var(--border)' }}>
                                                     <td style={{ padding: '10px 12px', fontWeight: 'bold' }}>{p.player_number}</td>
                                                     <td style={{ padding: '10px 12px', color: 'var(--text-h)', fontWeight: '500' }}>{p.player_name}</td>
                                                     <td style={{ padding: '10px 12px' }}>{p.handedness[0]}</td>
                                                     <td style={{ padding: '10px 12px' }}>{p.games_played}</td>
+                                                    <td style={{ padding: '10px 12px' }}>{p.plate_appearances}</td>
+                                                    <td style={{ padding: '10px 12px' }}>{p.at_bats}</td>
+                                                    <td style={{ padding: '10px 12px', fontWeight: 'bold' }}>{p.hits}</td>
+                                                    <td style={{ padding: '10px 12px' }}>{p.walks}</td>
+                                                    <td style={{ padding: '10px 12px' }}>{p.strikeouts}</td>
                                                     <td style={{ padding: '10px 12px' }}>{p.runs_scored}</td>
                                                     <td style={{ padding: '10px 12px' }}>{p.runs_batted_in}</td>
-                                                    <td style={{ padding: '10px 12px', fontWeight: 'bold' }}>{p.hits}</td>
-                                                    <td style={{ padding: '10px 12px' }}>{p.at_bats}</td>
+                                                    <td style={{ padding: '10px 12px' }}>{p.stolen_bases}</td>
                                                     <td style={{ padding: '10px 12px', color: 'var(--accent)', fontWeight: 'bold' }}>
                                                         {p.batting_average.toFixed(3).replace(/^0+/, '')}
                                                     </td>
