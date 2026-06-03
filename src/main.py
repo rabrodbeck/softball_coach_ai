@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, EmailStr
 from src.retriever import build_chain
-from src.database import authenticate_coach, register_coach, create_team, get_coach_teams, set_active_team, update_team
+from src.database import authenticate_coach, register_coach, create_team, get_coach_teams, set_active_team, update_team, add_player, get_team_roster, update_player_stats, delete_player
 
 app = FastAPI(title = "🥎 Softball Coach AI API")
 
@@ -55,6 +55,31 @@ class TeamUpdateRequest(BaseModel):
     ties: int
     age_group: str
     is_active: bool
+
+class PlayerRequest(BaseModel):
+    team_id: int
+    player_name: str
+    player_number: int
+    handedness: str
+
+class PlayerUpdateRequest(BaseModel):
+    player_name: str
+    player_number: int
+    handedness: str
+    games_played: int
+    plate_appearances: int
+    at_bats: int
+    singles: int
+    doubles: int
+    triples: int
+    home_runs: int
+    walks: int
+    strikeouts: int
+    hit_by_pitches: int
+    stolen_bases: int
+    caught_stealing: int
+    runs_scored: int
+    runs_batted_in: int
 
 # 2. Authentication API routes
 @app.post("/api/auth/register")
@@ -133,4 +158,41 @@ def api_update_team(team_id: int, data: TeamUpdateRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
+# 5. Roster Management API Routes
+@app.post("/api/roster")
+def api_add_player(data: PlayerRequest):
+    try:
+        new_player = add_player(data.team_id, data.player_name, data.player_number, data.handedness)
+        if not new_player:
+            raise HTTPException(status_code=500, detail="Failed to create player.")
+        return new_player
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
     
+@app.get("/api/roster/{team_id}")
+def api_get_roster(team_id: int):
+    try:
+        roster = get_team_roster(team_id)
+        return roster
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@app.put("/api/roster/{player_id}")
+def api_update_player(player_id: int, data: PlayerUpdateRequest):
+    try:
+        updated = update_player_stats(player_id, dict(data))
+        if not updated:
+            raise HTTPException(status_code=404, detail="Player not found.")
+        return updated
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@app.delete("/api/roster/{player_id}")
+def api_delete_player(player_id: int):
+    try:
+        success = delete_player(player_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Player not found.")
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

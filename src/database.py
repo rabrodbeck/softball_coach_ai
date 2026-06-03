@@ -197,3 +197,119 @@ def update_team(coach_id: int, team_id: int, team_name: str, season: str, wins: 
     finally:
         cursor.close()
         conn.close()
+
+def calculate_derived_stats(player: dict):
+    """Calculates htis, batting average, and on base percentage dynamically from raw stats."""
+    # 1. Calculate hits
+    singles = player.get("singles", 0)
+    doubles = player.get("doubles", 0)
+    triples = player.get("triples", 0)
+    home_runs = player.get("home_runs", 0)
+    hits = singles + doubles + triples + home_runs
+
+    # 2. Calculate batting average (hits/at-bats)
+    ab = player.get("at_bats", 0)
+    avg = hits / ab if ab > 0 else 0.0
+
+    # 3. Calculate on base percentage ((hits + walks + hbp) / plate appearances)
+    bb = player.get("walks", 0)
+    hbp = player.get("hit_by_pitches", 0)
+    pa = player.get("plate_appearances", 0)
+    obp = (hits + bb + hbp) / pa if pa > 0 else 0.0
+
+    # Return copies of the dict containing calculated fields
+    result = dict(player)
+    result["hits"] = hits
+    result["batting_average"] = round(avg, 3)
+    result["on_base_percentage"] = round(obp, 3)
+    return result
+
+def add_player(team_id: int, name: str, number: int, handedness: str):
+    """Creates a new player on a team with 0 starting stats."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            INSERT INTO rosters (team_id, player_name, player_number, handedness)
+            VALUES (%s, %s, %s, %s)
+            RETURNING *;
+            """,
+            (team_id, name.strip(), number, handedness)
+        )
+        row = cursor.fetchone()
+        conn.commit()
+        return calculate_derived_stats(row) if row else None
+    finally:
+        cursor.close()
+        conn.close()
+
+def get_team_roster(team_id: int):
+    """Retrieves all players on a team, including derived batting stats."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            SELECT * FROM rosters
+            WHERE team_id = %s
+            ORDER BY player_name ASC;
+            """,
+            (team_id,)
+        )
+        rows = cursor.fetchall()
+        return [calculate_derived_stats(row) for row in rows]
+    finally:
+        cursor.close()
+        conn.close()
+
+def update_player_stats(player_id: int, stats: dict):
+    """Updates raw player stats and refreshes updated_at timestamp."""
+    conn = get_db_connection()
+    cursor = conn.conn.cursor() if hasattr(conn, 'conn') else conn.cursor()
+    try:
+        cursor.execute(
+            """
+            UPDATE rosters
+            SET player_name = %s, player_number = %s, handedness = %s,
+                games_played = %s, plate_appearances = %s, at_bats = %s,
+                singles = %s, doubles = %s, triples = %s, home_runs = %s,
+                walks = %s, strikeouts = %s, hit_by_pitches = %s,
+                stolen_bases = %s, caught_stealing = %s,
+                runs_scored = %s, runs_batted_in = %s,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = %s
+            RETURNING *;
+            """,
+            (
+                stats["player_name"].strip(), stats["player_number"], stats["handedness"],
+                stats["games_played"], stats["plate_appearances"], stats["at_bats"],
+                stats["singles"], stats["doubles"], stats["triples"], stats["home_runs"],
+                stats["walks"], stats["strikeouts"], stats["hit_by_pitches"],
+                stats["stolen_bases"], stats["caught_stealing"],
+                stats["runs_scored"], stats["runs_batted_in"],
+                player_id
+            )
+        )
+        row = cursor.fetchone()
+        conn.commit()
+        return calculate_derived_stats(row) if row else None
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        cursor.close()
+        conn.close()
+
+def delete_player(player_id: int):
+    """Removes a player from the roster"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM rosters WHERE id = %s RETURNING id;", (player_id,))
+        row = cursor.fetchone()
+        conn.commit()
+        return row is not None
+    finally:
+        cursor.close()
+        conn.close()
