@@ -357,7 +357,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                     </div>
                                 ))}
                                 
-                                {/* Section for archived/inactive teams */}
+                                                                {/* Section for archived/inactive teams */}
                                 {teams.some(t => !t.is_active) && (
                                     <>
                                         <hr style={{ border: 'none', borderTop: '1px dashed var(--border)', margin: '8px 0' }} />
@@ -365,30 +365,33 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                         {teams.filter(t => !t.is_active).map((t) => (
                                             <div 
                                                 key={t.id} 
-                                                className="team-card inactive"
+                                                onClick={() => onSelectTeam(t)}
+                                                className={`team-card inactive ${t.id === selectedTeamId ? 'active' : ''}`}
                                                 style={{
                                                     display: 'flex',
                                                     justifyContent: 'space-between',
                                                     alignItems: 'center',
                                                     padding: '12px 16px',
                                                     borderRadius: '8px',
-                                                    border: '1px solid var(--border)',
-                                                    background: 'rgba(0,0,0,0.1)',
-                                                    opacity: 0.6
+                                                    border: t.id === selectedTeamId ? '2px solid var(--accent)' : '1px solid var(--border)',
+                                                    background: t.id === selectedTeamId ? 'var(--accent-bg)' : 'rgba(0,0,0,0.1)',
+                                                    opacity: t.id === selectedTeamId ? 1 : 0.6,
+                                                    cursor: 'pointer',
+                                                    transition: 'all 0.2s'
                                                 }}
                                             >
                                                 <div className="team-card-info" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                                                    <Users style={{ color: 'var(--text)' }} size={20} />
+                                                    <Users style={{ color: t.id === selectedTeamId ? 'var(--accent)' : 'var(--text)' }} size={20} />
                                                     <div>
-                                                        <h4 style={{ margin: 0, color: 'var(--text-h)', fontWeight: '500' }}>{t.team_name}</h4>
+                                                        <h4 style={{ margin: 0, color: 'var(--text-h)', fontWeight: t.id === selectedTeamId ? '600' : '500' }}>{t.team_name}</h4>
                                                         <span style={{ fontSize: '11px', color: 'var(--text)' }}>{t.season} • {t.age_group}</span>
                                                     </div>
                                                 </div>
                                                 <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                                                    <div className="team-stats" style={{ display: 'flex', gap: '8px', fontSize: '12px' }}>
-                                                        <span>{t.wins}W</span>
-                                                        <span>{t.losses}L</span>
-                                                        <span>{t.ties}T</span>
+                                                    <div className="team-stats" style={{ display: 'flex', gap: '8px', fontSize: '12px', fontWeight: t.id === selectedTeamId ? 'bold' : 'normal' }}>
+                                                        <span style={{ color: t.id === selectedTeamId ? '#22c55e' : 'inherit' }}>{t.wins}W</span>
+                                                        <span style={{ color: t.id === selectedTeamId ? '#ef4444' : 'inherit' }}>{t.losses}L</span>
+                                                        <span style={{ color: t.id === selectedTeamId ? '#94a3b8' : 'inherit' }}>{t.ties}T</span>
                                                     </div>
                                                     <button 
                                                         onClick={(e) => startEditing(t, e)}

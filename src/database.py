@@ -106,12 +106,8 @@ def create_team(coach_id: int, team_name: str, season: str, age_group: str):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        # Check if the coach already has any teams
-        cursor.execute("SELECT count(*) FROM teams WHERE coach_id = %s", (coach_id,))
-        count = cursor.fetchone()["count"]
-
-        # If this is the first team, make it active automatcially
-        is_active = (count == 0)
+        # Automatically default all newly created teams to active
+        is_active = True
 
         cursor.execute(
             """
@@ -191,7 +187,7 @@ def update_team(coach_id: int, team_id: int, team_name: str, season: str, wins: 
             WHERE id = %s AND coach_id = %s
             RETURNING id, team_name, season, age_group, wins, losses, ties, is_active;
             """,
-            team_name.strip(), season.strip(), wins, losses, ties, age_group, is_active, team_id, coach_id)
+            (team_name.strip(), season.strip(), wins, losses, ties, age_group, is_active, team_id, coach_id))
         updated_team = cursor.fetchone()
         conn.commit()
         return dict(updated_team) if updated_team else None
