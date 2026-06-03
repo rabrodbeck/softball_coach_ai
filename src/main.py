@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, EmailStr
 from src.retriever import build_chain
-from src.database import authenticate_coach, register_coach, create_team, get_coach_teams, set_active_team
+from src.database import authenticate_coach, register_coach, create_team, get_coach_teams, set_active_team, update_team
 
 app = FastAPI(title = "🥎 Softball Coach AI API")
 
@@ -45,6 +45,16 @@ class TeamRequest(BaseModel):
 
 class SetActiveRequest(BaseModel):
     coach_id: int
+
+class TeamUpdateRequest(BaseModel):
+    coach_id: int
+    team_name: str
+    season: str
+    wins: int
+    losses: int
+    ties: int
+    age_group: str
+    is_active: bool
 
 # 2. Authentication API routes
 @app.post("/api/auth/register")
@@ -92,7 +102,7 @@ def api_create_team(data: TeamRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
-@app.get("api/teams/{coach_id}")
+@app.get("/api/teams/{coach_id}")
 def api_get_teams(coach_id: int):
     try:
         teams = get_coach_teams(coach_id)
@@ -100,7 +110,7 @@ def api_get_teams(coach_id: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
-@app.post("api/teams/{team_id}/active")
+@app.post("/api/teams/{team_id}/active")
 def api_set_active(team_id: int, data: SetActiveRequest):
     try:
         updated_team = set_active_team(data.coach_id, team_id)
@@ -109,3 +119,18 @@ def api_set_active(team_id: int, data: SetActiveRequest):
         return updated_team
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.put("/api/teams/{team_id}")
+def api_update_team(team_id: int, data: TeamUpdateRequest):
+    try:
+        updated = update_team(
+            data.coach_id, team_id, data.team_name, data.season,
+            data.wins, data.losses, data.ties, data.age_group, data.is_active
+        )
+        if not updated:
+            raise HTTPException(status_code=404, detail="Team not found or unauthorized.")
+        return updated
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+    

@@ -60,7 +60,7 @@ def authenticate_coach(username, password):
     cursor = conn.cursor()
     pwd_hash = hash_password(password)
     cursor.execute('''
-        SELECT username, coach_name, location, primary_age_group
+        SELECT id, username, coach_name, location, primary_age_group
         FROM coaches
         WHERE username = %s AND password_hash = %s
         ''', (username.lower().strip(), pwd_hash))
@@ -69,6 +69,7 @@ def authenticate_coach(username, password):
     conn.close()
     if row:
         return {
+            "id": row["id"], 
             "username": row["username"],
             "coach_name": row["coach_name"],
             "location": row["location"],
@@ -106,7 +107,7 @@ def create_team(coach_id: int, team_name: str, season: str, age_group: str):
     cursor = conn.cursor()
     try:
         # Check if the coach already has any teams
-        cursor.execute("SELECT count(*) FROM teams WHERE coach_id = %s", (coach_id))
+        cursor.execute("SELECT count(*) FROM teams WHERE coach_id = %s", (coach_id,))
         count = cursor.fetchone()["count"]
 
         # If this is the first team, make it active automatcially
@@ -122,7 +123,7 @@ def create_team(coach_id: int, team_name: str, season: str, age_group: str):
         )
         new_team = cursor.fetchone()
         conn.commit()
-        return new_team
+        return dict(new_team) if new_team else None
     except Exception as e:
         conn.rollback()
         raise e
@@ -142,10 +143,10 @@ def get_coach_teams(coach_id: int):
             WHERE coach_id = %s
             ORDER BY created_at DESC;
             """,
-            (coach_id)
+            (coach_id,)
         )
         teams = cursor.fetchall()
-        return teams
+        return [dict(team) for team in teams]
     finally:
         cursor.close()
         conn.close()
@@ -157,7 +158,7 @@ def set_active_team(coach_id: int, team_id: int):
     try:
         # 1. De-activate all teams for this coach
         cursor.execute(
-            "UDPATE teams SET is_active = false where coach_id = %s", (coach_id)
+            "UPDATE teams SET is_active = false where coach_id = %s", (coach_id,)
         )
         # 2. Activate the selected team
         cursor.execute(
@@ -170,7 +171,30 @@ def set_active_team(coach_id: int, team_id: int):
         )
         active_team = cursor.fetchone()
         conn.commit()
-        return active_team
+        return dict(active_team) if active_team else None
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        cursor.close()
+        conn.close()
+
+def update_team(coach_id: int, team_id: int, team_name: str, season: str, wins: int, losses: int, ties: int, age_group: str, is_active: bool):
+    """Updates a team's details."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            UPDATE teams 
+            SET team_name = %s, season = %s, wins = %s, losses = %s, ties = %s, age_group = %s, is_active = %s
+            WHERE id = %s AND coach_id = %s
+            RETURNING id, team_name, season, age_group, wins, losses, ties, is_active;
+            """,
+            team_name.strip(), season.strip(), wins, losses, ties, age_group, is_active, team_id, coach_id)
+        updated_team = cursor.fetchone()
+        conn.commit()
+        return dict(updated_team) if updated_team else None
     except Exception as e:
         conn.rollback()
         raise e
