@@ -196,11 +196,11 @@ def build_agent_executor(coach_id: int, selected_team_id: int | None = None):
         ("system", system_prompt),
         MessagesPlaceholder(variable_name="chat_history"),
         ("human", "{input}"),
-        MessagesPlaceholder(variable_name="intermediate_steps"),
+        MessagesPlaceholder(variable_name="agent_scratchpad"),
     ])
 
     agent = create_tool_calling_agent(llm, tools, prompt)
-    return AgentExecutor(agent=agent, tools=tools, verbose=False)
+    return AgentExecutor(agent=agent, tools=tools, verbose=False, return_intermediate_steps=True)
 
 if __name__ == "__main__":
     print("Building RAG chain...")
