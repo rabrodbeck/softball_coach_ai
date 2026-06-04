@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, EmailStr
-from src.retriever import build_chain
+from src.retriever import build_chain, build_agent_executor
 from src.database import authenticate_coach, register_coach, create_team, get_coach_teams, set_active_team, update_team, add_player, get_team_players, update_player_stats, delete_player, bulk_update_player_stats
 
 app = FastAPI(title = "🥎 Softball Coach AI API")
@@ -36,6 +36,8 @@ class ChatRequest(BaseModel):
     age_group: str
     coach_name: str
     location: str
+    coach_id: int | None = None
+    selected_team_id: int | None = None
 
 class TeamRequest(BaseModel):
     coach_id: int
@@ -160,7 +162,33 @@ def api_chat(data: ChatRequest):
         f"Tailor advice for competitive {data.age_group} fastpitch players."
     )
 
-    # Simple non-streaming wrapper (or use EventSource/SSE for token streaming)
+    if data.coach_id is not None:
+        try:
+            # Instantiate agent executor dynamically for the logged-in coach
+            agent_executor = build_agent_executor(data.coach_id, data.selected_team_id)
+            
+            result = agent_executor.invoke({
+                "input": data.question,
+                "chat_history": []
+            })
+            
+            # Extract source documents from intermediate steps if search_playbook was called
+            sources = []
+            if "intermediate_steps" in result:
+                for action, observation in result["intermediate_steps"]:
+                    if action.tool == "search_playbook":
+                        sources.append("softball_playbook")
+            
+            return {
+                "answer": result["output"],
+                "sources": list(set(sources))
+            }
+        except Exception as e:
+            # Fallback to the classic RAG chain if agent execution fails
+            print(f"Agent execution failed, falling back to RAG chain: {e}")
+            pass
+
+    # Simple non-streaming wrapper fallback
     result = chain.invoke({
         "question": data.question,
         "profile_context": profile_context

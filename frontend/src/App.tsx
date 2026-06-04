@@ -106,8 +106,10 @@ function App() {
           isGuest={isGuest}
         />
         <main className='whiteboard-area'>
-          <ChatArea userProfile={user ? { ...user, age_group: currentAgeGroup } : null}
-          selectedTeamId={selectedTeam ? selectedTeam.id : null} />
+          <ChatArea 
+            userProfile={user ? { ...user, age_group: currentAgeGroup } : null} 
+            selectedTeamId={selectedTeam ? selectedTeam.id : null}
+          />
         </main>
       </div>
 
