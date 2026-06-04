@@ -313,3 +313,73 @@ def delete_player(player_id: int):
     finally:
         cursor.close()
         conn.close()
+
+def bulk_update_roster_stats(team_id: int, updates: list):
+    """Updates multiple players stats in a single database transaction."""
+    conn = get_db_connection()
+    cursor = conn.conn.cursor() if hasattr(conn, 'conn') else conn.cursor()
+    try:
+        updated_players = []
+        for p in updates:
+            number = p.get("player_number")
+            name = p.get("player_name", "").strip()
+            
+            # Find player ID by jersey number (if specified) or name (if number is unassigned/0)
+            if number > 0:
+                cursor.execute(
+                    """
+                    SELECT id FROM rosters 
+                    WHERE team_id = %s AND player_number = %s
+                    LIMIT 1;
+                    """,
+                    (team_id, number)
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT id FROM rosters 
+                    WHERE team_id = %s AND LOWER(player_name) = LOWER(%s)
+                    LIMIT 1;
+                    """,
+                    (team_id, name)
+                )
+            row = cursor.fetchone()
+            if not row:
+                continue
+                
+            player_id = row["id"]
+            
+            # Update raw counts
+            cursor.execute(
+                """
+                UPDATE rosters
+                SET games_played = %s, plate_appearances = %s, at_bats = %s,
+                    singles = %s, doubles = %s, triples = %s, home_runs = %s,
+                    walks = %s, strikeouts = %s, hit_by_pitches = %s,
+                    stolen_bases = %s, caught_stealing = %s,
+                    runs_scored = %s, runs_batted_in = %s,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s
+                RETURNING *;
+                """,
+                (
+                    p["games_played"], p["plate_appearances"], p["at_bats"],
+                    p["singles"], p["doubles"], p["triples"], p["home_runs"],
+                    p["walks"], p["strikeouts"], p["hit_by_pitches"],
+                    p["stolen_bases"], p["caught_stealing"],
+                    p["runs_scored"], p["runs_batted_in"],
+                    player_id
+                )
+            )
+            updated_row = cursor.fetchone()
+            if updated_row:
+                updated_players.append(calculate_derived_stats(updated_row))
+                
+        conn.commit()
+        return updated_players
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        cursor.close()
+        conn.close()

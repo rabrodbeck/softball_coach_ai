@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, EmailStr
 from src.retriever import build_chain
-from src.database import authenticate_coach, register_coach, create_team, get_coach_teams, set_active_team, update_team, add_player, get_team_roster, update_player_stats, delete_player
+from src.database import authenticate_coach, register_coach, create_team, get_coach_teams, set_active_team, update_team, add_player, get_team_roster, update_player_stats, delete_player, bulk_update_roster_stats
 
 app = FastAPI(title = "🥎 Softball Coach AI API")
 
@@ -80,6 +80,28 @@ class PlayerUpdateRequest(BaseModel):
     caught_stealing: int
     runs_scored: int
     runs_batted_in: int
+
+class BulkImportPlayer(BaseModel):
+    player_name: str
+    player_number: int
+    games_played: int
+    plate_appearances: int
+    at_bats: int
+    singles: int
+    doubles: int
+    triples: int
+    home_runs: int
+    walks: int
+    strikeouts: int
+    hit_by_pitches: int
+    stolen_bases: int
+    caught_stealing: int
+    runs_scored: int
+    runs_batted_in: int
+
+class BulkImportRequest(BaseModel):
+    team_id: int
+    players: list[BulkImportPlayer]
 
 # 2. Authentication API routes
 @app.post("/api/auth/register")
@@ -196,3 +218,13 @@ def api_delete_player(player_id: int):
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.post("/api/roster/bulk-update")
+def api_bulk_update_roster(data: BulkImportRequest):
+    try:
+        player_data = [dict(p) for p in data.players]
+        updated = bulk_update_roster_stats(data.team_id, player_data)
+        return updated
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    

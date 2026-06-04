@@ -85,6 +85,11 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
     const [cs, setCs] = useState(0);
     const [runsScored, setRunsScored] = useState(0);
     const [rbi, setRbi] = useState(0);
+
+    // Import state variables
+    const [importPreview, setImportPreview] = useState<any[]>([])
+    const [showImportModal, setShowImportModal] = useState(false)
+
     // Sorting State
     const [sortField, setSortField] = useState<keyof Player | null>(null);
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -310,6 +315,165 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
         setPlayerName('');
     };
 
+    const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const text = event.target?.result as string;
+            if (!text) return;
+
+            // 1. Lightweight CSV string parser
+            const lines = text.split(/\r?\n/);
+            if (lines.length < 2) return;
+
+            const parseCSVLine = (line: string) => {
+                const result = [];
+                let current = '';
+                let inQuotes = false;
+                for (let i = 0; i < line.length; i++) {
+                    const char = line[i];
+                    if (char === '"') {
+                        inQuotes = !inQuotes;
+                    } else if (char === ',' && !inQuotes) {
+                        result.push(current.trim());
+                        current = '';
+                    } else {
+                        current += char;
+                    }
+                }
+                result.push(current.trim());
+                return result;
+            };
+
+            // 2. Find the header line by scanning the first few lines for known stat columns (e.g. GP, PA, AB)
+            let headerLineIdx = 0;
+            for (let i = 0; i < Math.min(lines.length, 10); i++) {
+                const parsed = parseCSVLine(lines[i]).map(h => h.replace(/"/g, '').replace(/\s+/g, '').trim().toUpperCase());
+                if (parsed.includes("GP") || parsed.includes("PA") || parsed.includes("AB") || parsed.includes("GAMESPLAYED") || parsed.includes("ATBATS")) {
+                    headerLineIdx = i;
+                    break;
+                }
+            }
+
+            const rawHeaders = parseCSVLine(lines[headerLineIdx]);
+            
+            // Find the index of the last batting column ('GITP') to ignore pitching/fielding duplicates
+            let lastBattingColIdx = rawHeaders.findIndex(h => {
+                const clean = h.replace(/"/g, '').trim().toUpperCase();
+                return clean === 'GITP' || clean === 'BA';
+            });
+            
+            // Fallback to column index 52 (Excel column BA) if 'GITP' isn't explicitly found
+            if (lastBattingColIdx === -1) {
+                lastBattingColIdx = 52;
+            }
+
+            // Slice raw headers and clean them by removing all whitespace/quotes and converting to uppercase
+            const slicedRawHeaders = rawHeaders.slice(0, lastBattingColIdx + 1);
+            const cleanHeader = (h: string) => h.replace(/"/g, '').replace(/\s+/g, '').trim().toUpperCase();
+            const headers = slicedRawHeaders.map(cleanHeader);
+
+            const parsedPlayers: any[] = [];
+            
+            for (let i = headerLineIdx + 1; i < lines.length; i++){
+                if (!lines[i].trim()) continue;
+                const rawValues = parseCSVLine(lines[i]);
+                // Keep only the batting stats columns for this row
+                const values = rawValues.slice(0, lastBattingColIdx + 1);
+
+                // Map columns using indexes
+                const getVal = (colNames: string[], defaultVal = 0) => {
+                    const idx = headers.findIndex(h => colNames.includes(h));
+                    if (idx === -1 || !values[idx]) return defaultVal;
+                    return parseInt(values[idx].replace(/"/g, '')) || defaultVal;
+                };
+
+                const getStr = (colNames: string[]) => {
+                    const idx = headers.findIndex(h => colNames.includes(h));
+                    if (idx === -1 || !values[idx]) return '';
+                    return values[idx].replace(/"/g, '').trim();
+                };
+
+                // Search terms are normalized (no whitespace, uppercase)
+                const playerNum = getVal(["#", "JERSEY", "JERSEY#", "JERSEYNUMBER", "NUMBER", "NO", "NO.", "PLAYERNUMBER", "NUM", "JERSEYNO", "JERSEYNO.", "PLAYERNO", "PLAYERNO.", "NUMBER#"]);
+                
+                // Extract and combine first and last name, or fallback to full name/player column
+                const first = getStr(["FIRST", "FIRSTNAME", "PLAYER", "PLAYERNAME", "NAME"]);
+                const last = getStr(["LAST", "LASTNAME"]);
+                const playerName = last ? `${first} ${last}` : first;
+
+                // If we have no jersey number and no name, skip the row (it's probably an empty line or footer)
+                if (playerNum === 0 && !playerName) continue;
+
+                // Match with existing roster by Jersey Number ONLY (per user preference)
+                const existing = roster.find(r => playerNum > 0 && r.player_number === playerNum);
+
+                parsedPlayers.push({
+                    matched: !!existing,
+                    existing_id: existing?.id,
+                    player_name: existing?.player_name || playerName || `Player #${playerNum}`,
+                    player_number: existing?.player_number || playerNum,
+                    handedness: existing?.handedness || "Righty",
+
+                    // Stats mapping using normalized spaceless search keys
+                    games_played: getVal(["GP", "G", "GAMES", "GAMESPLAYED"]),
+                    plate_appearances: getVal(["PA", "PLATEAPPEARANCES"]),
+                    at_bats: getVal(["AB", "ATBATS"]),
+                    singles: getVal(["1B", "SINGLES", "SINGLE"]),
+                    doubles: getVal(["2B", "DOUBLES", "DOUBLE"]),
+                    triples: getVal(["3B", "TRIPLES", "TRIPLE"]),
+                    home_runs: getVal(["HR", "HOMERUNS", "HOMERUN"]),
+                    walks: getVal(["BB", "WALKS", "WALK", "BASEONBALLS"]),
+                    strikeouts: getVal(["SO", "STRIKEOUTS", "K", "STRIKEOUT"]),
+                    hit_by_pitches: getVal(["HBP", "HITBYPITCH", "HITBYPITCHES"]),
+                    stolen_bases: getVal(["SB", "STOLENBASES"]),
+                    caught_stealing: getVal(["CS", "CAUGHTSTEALING"]),
+                    runs_scored: getVal(["R", "RUNS", "RUNSSCORED"]),
+                    runs_batted_in: getVal(["RBI", "RBIS", "RUNSBATTEDIN"]),
+                });
+            }
+            
+            setImportPreview(parsedPlayers);
+            setShowImportModal(true);
+
+            // Reset file input value so same file can be selected again
+            e.target.value = '';
+        };
+        reader.readAsText(file);
+    };
+
+    const handleConfirmImport = async () => {
+        if (!selectedTeamId || importPreview.length === 0) return;
+        
+        // Only send matched players to bulk update
+        const matchedUpdates = importPreview.filter(p => p.matched);
+        if (matchedUpdates.length === 0) {
+            alert("No matched players found to update.");
+            return;
+        }
+        try {
+            const response = await fetch(`${API_BASE}/api/roster/bulk-update`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    team_id: selectedTeamId,
+                    players: matchedUpdates
+                })
+            });
+            if (response.ok) {
+                setShowImportModal(false);
+                fetchRoster();
+                alert("Roster statistics successfully synced with GameChanger!");
+            } else {
+                alert("Failed to update statistics.");
+            }
+        } catch (err) {
+            console.error("Error bulk updating stats:", err);
+        }
+    }
+
     return (
         <div className="modal-overlay">
             <div className="team-manager-card" style={{ width: activeTab === 'roster' ? '1050px' : '550px', transition: 'width 0.2s ease-out' }}>
@@ -376,7 +540,12 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                         </form>
                     ) : (
                         <div className="teams-list-area">
-                            <div className="list-subheader" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}><span style={{ fontSize: '14px', color: 'var(--text)' }}>Select or edit a team below</span><button onClick={() => setShowAddForm(true)} className="btn-add-team"><Plus size={16} /> Add Team</button></div>
+                            <div className="list-subheader" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                <span style={{ fontSize: '14px', color: 'var(--text)' }}>Select or edit a team below</span>
+                                <button onClick={() => setShowAddForm(true)} className="btn-add-team">
+                                    <Plus size={16} /> Add Team
+                                </button>
+                            </div>
                             <div className="teams-grid" style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '350px', overflowY: 'auto', padding: '4px' }}>
                                 {teams.filter(t => t.is_active).map((t) => (
                                     <div key={t.id} onClick={() => onSelectTeam(t)} className={`team-card ${t.id === selectedTeamId ? 'active' : ''}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', borderRadius: '8px', border: t.id === selectedTeamId ? '2px solid var(--accent)' : '1px solid var(--border)', background: t.id === selectedTeamId ? 'var(--accent-bg)' : 'var(--bg)', cursor: 'pointer' }}>
@@ -466,9 +635,15 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                 <h3 style={{ margin: 0, fontSize: '16px', color: 'var(--text-h)' }}>
                                     Team Roster {selectedTeamId && ` - ${teams.find(t => t.id === selectedTeamId)?.team_name}`}
                                 </h3>
-                                <button onClick={() => setShowAddPlayerForm(true)} className="btn-add-team">
-                                    <Plus size={16} /> Add Player
-                                </button>
+                                <div style={{ display: 'flex', gap: '8px' }}>
+                                    <label className="btn-guest" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer', padding: '8px 12px' }}>
+                                        <Plus size={14} /> Import GC Stats
+                                        <input type="file" accept=".csv" onChange={handleFileImport} style={{ display: 'none' }} />
+                                    </label>
+                                    <button onClick={() => setShowAddPlayerForm(true)} className="btn-add-team">
+                                        <Plus size={16} /> Add Player
+                                    </button>
+                                </div>
                             </div>
 
                             {loading && roster.length === 0 ? (
@@ -564,6 +739,65 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                             )}
                         </div>
                     )
+                )}
+                            {/* GameChanger Import Review Modal */}
+                {showImportModal && (
+                    <div className="modal-overlay" style={{ zIndex: 1100 }}>
+                        <div className="team-manager-card" style={{ width: '680px', maxHeight: '80%', display: 'flex', flexDirection: 'column' }}>
+                            <div className="team-manager-header">
+                                <h3>Review Imported GameChanger Stats</h3>
+                                <button onClick={() => setShowImportModal(false)} className="btn-close-modal"><X size={18} /></button>
+                            </div>
+                            
+                            <p style={{ fontSize: '14px', marginBottom: '16px', color: 'var(--text)' }}>
+                                Match results from GC spreadsheet. Only matched players will have their statistics updated.
+                            </p>
+
+                            <div style={{ flex: 1, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '8px', marginBottom: '16px', padding: '8px' }}>
+                                <table style={{ width: '100%', fontSize: '13px', borderCollapse: 'collapse', textAlign: 'left' }}>
+                                    <thead>
+                                        <tr style={{ borderBottom: '2px solid var(--border)' }}>
+                                            <th style={{ padding: '8px' }}>Match</th>
+                                            <th style={{ padding: '8px' }}>#</th>
+                                            <th style={{ padding: '8px' }}>Player Name</th>
+                                            <th style={{ padding: '8px' }}>PA</th>
+                                            <th style={{ padding: '8px' }}>AB</th>
+                                            <th style={{ padding: '8px' }}>H</th>
+                                            <th style={{ padding: '8px' }}>R</th>
+                                            <th style={{ padding: '8px' }}>RBI</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {importPreview.map((p, idx) => (
+                                            <tr key={idx} style={{ borderBottom: '1px solid var(--border)', opacity: p.matched ? 1 : 0.5 }}>
+                                                <td style={{ padding: '8px', color: p.matched ? '#22c55e' : '#ef4444', fontWeight: 'bold' }}>
+                                                    {p.matched ? '✓ Matched' : '✗ No Match'}
+                                                </td>
+                                                <td style={{ padding: '8px', fontWeight: 'bold' }}>{p.player_number}</td>
+                                                <td style={{ padding: '8px' }}>{p.player_name}</td>
+                                                <td style={{ padding: '8px' }}>{p.plate_appearances}</td>
+                                                <td style={{ padding: '8px' }}>{p.at_bats}</td>
+                                                <td style={{ padding: '8px', fontWeight: 'bold' }}>
+                                                    {p.singles + p.doubles + p.triples + p.home_runs}
+                                                </td>
+                                                <td style={{ padding: '8px' }}>{p.runs_scored}</td>
+                                                <td style={{ padding: '8px' }}>{p.runs_batted_in}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div className="form-actions" style={{ display: 'flex', flexDirection: 'row', gap: '12px' }}>
+                                <button onClick={handleConfirmImport} className="btn-primary" style={{ flex: 1 }}>
+                                    Confirm & Sync Stats ({importPreview.filter(p => p.matched).length} Players)
+                                </button>
+                                <button onClick={() => setShowImportModal(false)} className="btn-secondary" style={{ flex: 1 }}>
+                                    Cancel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 )}
             </div>
         </div>
