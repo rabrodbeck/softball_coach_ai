@@ -1,26 +1,25 @@
-import os
 import sys
+import os
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add the project root to path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from src.database import update_team
-
-print("Import successful! Testing update_team(1, 3, ...)...")
+from src.database import get_team_players, add_player
 
 try:
-    result = update_team(
-        coach_id=1,
-        team_id=3,
-        team_name="Lady Hawks Test",
-        season="Spring 2026",
-        wins=0,
-        losses=0,
-        ties=0,
-        age_group="12U Division",
-        is_active=True
-    )
-    print("update_team successful! Result:", result)
+    print("Testing get_team_players(3)...")
+    players = get_team_players(3)
+    print("Success! Player count:", len(players))
 except Exception as e:
     import traceback
-    print("\n❌ ERROR IN update_team:")
+    print("Failed get_team_players(3) with error:")
+    traceback.print_exc()
+
+try:
+    print("\nTesting add_player(3, 'Test Player', 99, 'Righty')...")
+    player = add_player(3, 'Test Player', 99, 'Righty')
+    print("Success! Created player ID:", player["id"])
+except Exception as e:
+    import traceback
+    print("Failed add_player(3) with error:")
     traceback.print_exc()

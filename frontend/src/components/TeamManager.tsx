@@ -19,6 +19,7 @@ interface Player {
     player_number: number;
     handedness: string;
     games_played: number;
+    parent_player_id?: number | null;
     plate_appearances: number;
     at_bats: number;
     hits: number; // Derived
@@ -47,9 +48,9 @@ interface TeamManagerProps {
 }
 
 export default function TeamManager({ coachId, onClose, selectedTeamId, onSelectTeam }: TeamManagerProps) {
-    const [activeTab, setActiveTab] = useState<'teams' | 'roster'>('teams');
+    const [activeTab, setActiveTab] = useState<'teams' | 'players'>('teams');
     const [teams, setTeams] = useState<Team[]>([]);
-    const [roster, setRoster] = useState<Player[]>([]);
+    const [players, setPlayers] = useState<Player[]>([]);
     const [loading, setLoading] = useState(false);
     
     // Forms state toggles
@@ -104,9 +105,9 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
         }
     };
     // Derived sorted roster list
-    const sortedRoster = React.useMemo(() => {
-        if (!sortField) return roster;
-        return [...roster].sort((a, b) => {
+    const sortedPlayers = React.useMemo(() => {
+        if (!sortField) return players;
+        return [...players].sort((a, b) => {
             const aVal = a[sortField];
             const bVal = b[sortField];
             
@@ -121,7 +122,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
             const bNum = Number(bVal) || 0;
             return sortDirection === 'asc' ? aNum - bNum : bNum - aNum;
         });
-    }, [roster, sortField, sortDirection]);
+    }, [players, sortField, sortDirection]);
     const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
     const fetchTeams = async () => {
@@ -151,14 +152,14 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
         }
     };
 
-    const fetchRoster = async () => {
+    const fetchPlayers = async () => {
         if (!selectedTeamId) return;
         setLoading(true);
         try {
-            const response = await fetch(`${API_BASE}/api/roster/${selectedTeamId}`);
+            const response = await fetch(`${API_BASE}/api/players/${selectedTeamId}`);
             if (response.ok) {
                 const data = await response.json();
-                setRoster(data);
+                setPlayers(data);
             }
         } catch (err) {
             console.error("Error fetching roster:", err);
@@ -172,8 +173,8 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
     }, [coachId]);
 
     useEffect(() => {
-        if (activeTab === 'roster') {
-            fetchRoster();
+        if (activeTab === 'players') {
+            fetchPlayers();
         }
     }, [activeTab, selectedTeamId]);
 
@@ -231,7 +232,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
         e.preventDefault();
         if (!playerName.trim() || !selectedTeamId) return;
         try {
-            const response = await fetch(`${API_BASE}/api/roster`, {
+            const response = await fetch(`${API_BASE}/api/players`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ team_id: selectedTeamId, player_name: playerName, player_number: playerNumber, handedness: handedness })
@@ -240,7 +241,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                 setPlayerName('');
                 setPlayerNumber(0);
                 setShowAddPlayerForm(false);
-                fetchRoster();
+                fetchPlayers();
             }
         } catch (err) {
             console.error("Error creating player:", err);
@@ -272,7 +273,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
         e.preventDefault();
         if (!editingPlayer || !playerName.trim()) return;
         try {
-            const response = await fetch(`${API_BASE}/api/roster/${editingPlayer.id}`, {
+            const response = await fetch(`${API_BASE}/api/players/${editingPlayer.id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -287,7 +288,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
             if (response.ok) {
                 setEditingPlayer(null);
                 setPlayerName('');
-                fetchRoster();
+                fetchPlayers();
             }
         } catch (err) {
             console.error("Error updating player:", err);
@@ -297,9 +298,9 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
     const handleDeletePlayer = async (playerId: number) => {
         if (!window.confirm("Are you sure you want to remove this player from the team?")) return;
         try {
-            const response = await fetch(`${API_BASE}/api/roster/${playerId}`, { method: "DELETE" });
+            const response = await fetch(`${API_BASE}/api/players/${playerId}`, { method: "DELETE" });
             if (response.ok) {
-                fetchRoster();
+                fetchPlayers();
             }
         } catch (err) {
             console.error("Error deleting player:", err);
@@ -371,44 +372,61 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
             }
 
             // Slice raw headers and clean them by removing all whitespace/quotes and converting to uppercase
-            const slicedRawHeaders = rawHeaders.slice(0, lastBattingColIdx + 1);
             const cleanHeader = (h: string) => h.replace(/"/g, '').replace(/\s+/g, '').trim().toUpperCase();
-            const headers = slicedRawHeaders.map(cleanHeader);
+            
+            // Slice headers into Batting (0 to BA) and Pitching (from BC / index 54 onwards)
+            const battingHeaders = rawHeaders.slice(0, lastBattingColIdx + 1).map(cleanHeader);
+            const pitchingHeaders = rawHeaders.slice(54).map(cleanHeader);
 
             const parsedPlayers: any[] = [];
             
             for (let i = headerLineIdx + 1; i < lines.length; i++){
                 if (!lines[i].trim()) continue;
                 const rawValues = parseCSVLine(lines[i]);
-                // Keep only the batting stats columns for this row
-                const values = rawValues.slice(0, lastBattingColIdx + 1);
+                
+                // Slice values to align with the split headers
+                const battingValues = rawValues.slice(0, lastBattingColIdx + 1);
+                const pitchingValues = rawValues.slice(54);
 
-                // Map columns using indexes
-                const getVal = (colNames: string[], defaultVal = 0) => {
-                    const idx = headers.findIndex(h => colNames.includes(h));
-                    if (idx === -1 || !values[idx]) return defaultVal;
-                    return parseInt(values[idx].replace(/"/g, '')) || defaultVal;
+                // Helper for Batting search
+                const getBattingVal = (colNames: string[], defaultVal = 0) => {
+                    const idx = battingHeaders.findIndex(h => colNames.includes(h));
+                    if (idx === -1 || !battingValues[idx]) return defaultVal;
+                    return parseInt(battingValues[idx].replace(/"/g, '')) || defaultVal;
                 };
 
                 const getStr = (colNames: string[]) => {
-                    const idx = headers.findIndex(h => colNames.includes(h));
-                    if (idx === -1 || !values[idx]) return '';
-                    return values[idx].replace(/"/g, '').trim();
+                    const idx = battingHeaders.findIndex(h => colNames.includes(h));
+                    if (idx === -1 || !battingValues[idx]) return '';
+                    return battingValues[idx].replace(/"/g, '').trim();
+                };
+
+                // Helpers for Pitching search
+                const getPitchingVal = (colNames: string[], defaultVal = 0) => {
+                    const idx = pitchingHeaders.findIndex(h => colNames.includes(h));
+                    if (idx === -1 || !pitchingValues[idx]) return defaultVal;
+                    return parseInt(pitchingValues[idx].replace(/"/g, '')) || defaultVal;
+                };
+
+                const getPitchingValFloat = (colNames: string[], defaultVal = 0.0) => {
+                    const idx = pitchingHeaders.findIndex(h => colNames.includes(h));
+                    if (idx === -1 || !pitchingValues[idx]) return defaultVal;
+                    return parseFloat(pitchingValues[idx].replace(/"/g, '')) || defaultVal;
                 };
 
                 // Search terms are normalized (no whitespace, uppercase)
-                const playerNum = getVal(["#", "JERSEY", "JERSEY#", "JERSEYNUMBER", "NUMBER", "NO", "NO.", "PLAYERNUMBER", "NUM", "JERSEYNO", "JERSEYNO.", "PLAYERNO", "PLAYERNO.", "NUMBER#"]);
+                const playerNum = getBattingVal(["#", "JERSEY", "JERSEY#", "JERSEYNUMBER", "NUMBER", "NO", "NO.", "PLAYERNUMBER", "NUM", "JERSEYNO", "JERSEYNO.", "PLAYERNO", "PLAYERNO.", "NUMBER#"]);
                 
                 // Extract and combine first and last name, or fallback to full name/player column
                 const first = getStr(["FIRST", "FIRSTNAME", "PLAYER", "PLAYERNAME", "NAME"]);
                 const last = getStr(["LAST", "LASTNAME"]);
                 const playerName = last ? `${first} ${last}` : first;
 
-                // If we have no jersey number and no name, skip the row (it's probably an empty line or footer)
+                // If we have no jersey number and no name, skip the row
                 if (playerNum === 0 && !playerName) continue;
 
-                // Match with existing roster by Jersey Number ONLY (per user preference)
-                const existing = roster.find(r => playerNum > 0 && r.player_number === playerNum);
+                // Match with existing roster by Jersey Number ONLY
+                const existing = players.find(r => playerNum > 0 && r.player_number === playerNum);
 
                 parsedPlayers.push({
                     matched: !!existing,
@@ -417,21 +435,35 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                     player_number: existing?.player_number || playerNum,
                     handedness: existing?.handedness || "Righty",
 
-                    // Stats mapping using normalized spaceless search keys
-                    games_played: getVal(["GP", "G", "GAMES", "GAMESPLAYED"]),
-                    plate_appearances: getVal(["PA", "PLATEAPPEARANCES"]),
-                    at_bats: getVal(["AB", "ATBATS"]),
-                    singles: getVal(["1B", "SINGLES", "SINGLE"]),
-                    doubles: getVal(["2B", "DOUBLES", "DOUBLE"]),
-                    triples: getVal(["3B", "TRIPLES", "TRIPLE"]),
-                    home_runs: getVal(["HR", "HOMERUNS", "HOMERUN"]),
-                    walks: getVal(["BB", "WALKS", "WALK", "BASEONBALLS"]),
-                    strikeouts: getVal(["SO", "STRIKEOUTS", "K", "STRIKEOUT"]),
-                    hit_by_pitches: getVal(["HBP", "HITBYPITCH", "HITBYPITCHES"]),
-                    stolen_bases: getVal(["SB", "STOLENBASES"]),
-                    caught_stealing: getVal(["CS", "CAUGHTSTEALING"]),
-                    runs_scored: getVal(["R", "RUNS", "RUNSSCORED"]),
-                    runs_batted_in: getVal(["RBI", "RBIS", "RUNSBATTEDIN"]),
+                    // Batting stats mapping
+                    games_played: getBattingVal(["GP", "G", "GAMES", "GAMESPLAYED"]),
+                    plate_appearances: getBattingVal(["PA", "PLATEAPPEARANCES"]),
+                    at_bats: getBattingVal(["AB", "ATBATS"]),
+                    singles: getBattingVal(["1B", "SINGLES", "SINGLE"]),
+                    doubles: getBattingVal(["2B", "DOUBLES", "DOUBLE"]),
+                    triples: getBattingVal(["3B", "TRIPLES", "TRIPLE"]),
+                    home_runs: getBattingVal(["HR", "HOMERUNS", "HOMERUN"]),
+                    walks: getBattingVal(["BB", "WALKS", "WALK", "BASEONBALLS"]),
+                    strikeouts: getBattingVal(["SO", "STRIKEOUTS", "K", "STRIKEOUT"]),
+                    hit_by_pitches: getBattingVal(["HBP", "HITBYPITCH", "HITBYPITCHES"]),
+                    stolen_bases: getBattingVal(["SB", "STOLENBASES"]),
+                    caught_stealing: getBattingVal(["CS", "CAUGHTSTEALING"]),
+                    runs_scored: getBattingVal(["R", "RUNS", "RUNSSCORED"]),
+                    runs_batted_in: getBattingVal(["RBI", "RBIS", "RUNSBATTEDIN"]),
+
+                    // Pitching stats mapping (from column BC / index 54 onwards)
+                    games_pitched: getPitchingVal(["GP", "G", "GAMES", "GAMESPITCHED"]),
+                    games_started: getPitchingVal(["GS", "GAMESSTARTED", "STARTED"]),
+                    innings_pitched: getPitchingValFloat(["IP", "INNINGSPITCHED"]),
+                    batters_faced: getPitchingVal(["BF", "BATTERSFACED"]),
+                    number_of_pitches: getPitchingVal(["#P", "PITCHES", "NP", "NUMBEROFPITCHES"]),
+                    hits_allowed: getPitchingVal(["H", "HITS", "HITSALLOWED"]),
+                    runs_allowed: getPitchingVal(["R", "RUNS", "RUNSALLOWED"]),
+                    earned_runs: getPitchingVal(["ER", "EARNEDRUNS"]),
+                    walks_allowed: getPitchingVal(["BB", "WALKS", "BASEONBALLS", "WALKSALLOWED"]),
+                    strikeouts_thrown: getPitchingVal(["SO", "STRIKEOUTS", "K", "STRIKEOUTSTHROWN"]),
+                    hit_by_pitches_allowed: getPitchingVal(["HBP", "HITBYPITCH", "HITBYPITCHES"]),
+                    left_on_base: getPitchingVal(["LOB", "LEFTONBASE"])
                 });
             }
             
@@ -454,7 +486,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
             return;
         }
         try {
-            const response = await fetch(`${API_BASE}/api/roster/bulk-update`, {
+            const response = await fetch(`${API_BASE}/api/players/bulk-update`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -464,7 +496,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
             });
             if (response.ok) {
                 setShowImportModal(false);
-                fetchRoster();
+                fetchPlayers();
                 alert("Roster statistics successfully synced with GameChanger!");
             } else {
                 alert("Failed to update statistics.");
@@ -476,7 +508,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
 
     return (
         <div className="modal-overlay">
-            <div className="team-manager-card" style={{ width: activeTab === 'roster' ? '1050px' : '550px', transition: 'width 0.2s ease-out' }}>
+            <div className="team-manager-card" style={{ width: activeTab === 'players' ? '1050px' : '550px', transition: 'width 0.2s ease-out' }}>
                 <div className="team-manager-header">
                     <div className="title-area">
                         <Users className="icon-sidebar" />
@@ -495,12 +527,12 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                         Teams List
                     </button>
                     <button 
-                        onClick={() => { setActiveTab('roster'); cancelForms(); }} 
+                        onClick={() => { setActiveTab('players'); cancelForms(); }} 
                         disabled={!selectedTeamId}
-                        className={`tab-btn ${activeTab === 'roster' ? 'active' : ''}`}
-                        style={{ padding: '8px 16px', background: activeTab === 'roster' ? 'var(--accent-bg)' : 'transparent', border: 'none', color: activeTab === 'roster' ? 'var(--accent)' : 'var(--text)', cursor: 'pointer', borderRadius: '6px', fontWeight: 'bold', opacity: selectedTeamId ? 1 : 0.4 }}
+                        className={`tab-btn ${activeTab === 'players' ? 'active' : ''}`}
+                        style={{ padding: '8px 16px', background: activeTab === 'players' ? 'var(--accent-bg)' : 'transparent', border: 'none', color: activeTab === 'players' ? 'var(--accent)' : 'var(--text)', cursor: 'pointer', borderRadius: '6px', fontWeight: 'bold', opacity: selectedTeamId ? 1 : 0.4 }}
                     >
-                        Active Roster
+                        Player List
                     </button>
                 </div>
 
@@ -630,10 +662,10 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                             </div>
                         </form>
                     ) : (
-                        <div className="roster-list-area">
+                        <div className="players-list-area">
                             <div className="list-subheader" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                                 <h3 style={{ margin: 0, fontSize: '16px', color: 'var(--text-h)' }}>
-                                    Team Roster {selectedTeamId && ` - ${teams.find(t => t.id === selectedTeamId)?.team_name}`}
+                                    Team Players {selectedTeamId && ` - ${teams.find(t => t.id === selectedTeamId)?.team_name}`}
                                 </h3>
                                 <div style={{ display: 'flex', gap: '8px' }}>
                                     <label className="btn-guest" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer', padding: '8px 12px' }}>
@@ -646,15 +678,15 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                 </div>
                             </div>
 
-                            {loading && roster.length === 0 ? (
-                                <div style={{ padding: '24px', textAlign: 'center' }}>Loading roster...</div>
-                            ) : roster.length === 0 ? (
+                            {loading && players.length === 0 ? (
+                                <div style={{ padding: '24px', textAlign: 'center' }}>Loading players...</div>
+                            ) : players.length === 0 ? (
                                 <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text)' }}>
                                     📋 No players added to the roster yet. Add your first player!
                                 </div>
                             ) : (
                                 <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: '8px' }}>
-                                    <table className="roster-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', textAlign: 'left' }}>
+                                    <table className="players-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', textAlign: 'left' }}>
                                         <thead>
                                             <tr style={{ background: 'var(--code-bg)', borderBottom: '1px solid var(--border)' }}>
                                                 <th onClick={() => handleSort('player_number')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
@@ -703,7 +735,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {sortedRoster.map((p) => (
+                                            {sortedPlayers.map((p) => (
                                                 <tr key={p.id} style={{ borderBottom: '1px solid var(--border)' }}>
                                                     <td style={{ padding: '10px 12px', fontWeight: 'bold' }}>{p.player_number}</td>
                                                     <td style={{ padding: '10px 12px', color: 'var(--text-h)', fontWeight: '500' }}>{p.player_name}</td>

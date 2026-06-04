@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, EmailStr
 from src.retriever import build_chain
-from src.database import authenticate_coach, register_coach, create_team, get_coach_teams, set_active_team, update_team, add_player, get_team_roster, update_player_stats, delete_player, bulk_update_roster_stats
+from src.database import authenticate_coach, register_coach, create_team, get_coach_teams, set_active_team, update_team, add_player, get_team_players, update_player_stats, delete_player, bulk_update_player_stats
 
 app = FastAPI(title = "🥎 Softball Coach AI API")
 
@@ -61,12 +61,14 @@ class PlayerRequest(BaseModel):
     player_name: str
     player_number: int
     handedness: str
+    parent_player_id: int | None = None
 
 class PlayerUpdateRequest(BaseModel):
     player_name: str
     player_number: int
     handedness: str
     games_played: int
+    parent_player_id: int | None = None
     plate_appearances: int
     at_bats: int
     singles: int
@@ -98,6 +100,20 @@ class BulkImportPlayer(BaseModel):
     caught_stealing: int
     runs_scored: int
     runs_batted_in: int
+    
+    # Pitching stats
+    games_pitched: int
+    games_started: int
+    innings_pitched: float
+    batters_faced: int
+    number_of_pitches: int
+    hits_allowed: int
+    runs_allowed: int
+    earned_runs: int
+    walks_allowed: int
+    strikeouts_thrown: int
+    hit_by_pitches_allowed: int
+    left_on_base: int
 
 class BulkImportRequest(BaseModel):
     team_id: int
@@ -180,8 +196,8 @@ def api_update_team(team_id: int, data: TeamUpdateRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
-# 5. Roster Management API Routes
-@app.post("/api/roster")
+# 5. Player Management API Routes
+@app.post("/api/players")
 def api_add_player(data: PlayerRequest):
     try:
         new_player = add_player(data.team_id, data.player_name, data.player_number, data.handedness)
@@ -191,15 +207,15 @@ def api_add_player(data: PlayerRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
-@app.get("/api/roster/{team_id}")
+@app.get("/api/players/{team_id}")
 def api_get_roster(team_id: int):
     try:
-        roster = get_team_roster(team_id)
+        roster = get_team_players(team_id)
         return roster
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
-@app.put("/api/roster/{player_id}")
+@app.put("/api/players/{player_id}")
 def api_update_player(player_id: int, data: PlayerUpdateRequest):
     try:
         updated = update_player_stats(player_id, dict(data))
@@ -209,7 +225,7 @@ def api_update_player(player_id: int, data: PlayerUpdateRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
-@app.delete("/api/roster/{player_id}")
+@app.delete("/api/players/{player_id}")
 def api_delete_player(player_id: int):
     try:
         success = delete_player(player_id)
@@ -219,11 +235,11 @@ def api_delete_player(player_id: int):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
-@app.post("/api/roster/bulk-update")
-def api_bulk_update_roster(data: BulkImportRequest):
+@app.post("/api/players/bulk-update")
+def api_bulk_update_players(data: BulkImportRequest):
     try:
         player_data = [dict(p) for p in data.players]
-        updated = bulk_update_roster_stats(data.team_id, player_data)
+        updated = bulk_update_player_stats(data.team_id, player_data)
         return updated
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
