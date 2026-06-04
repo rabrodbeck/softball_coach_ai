@@ -424,9 +424,60 @@ def update_player_stats(player_id: int, stats: dict):
             )
         )
         stats_row = cursor.fetchone()
+        
+        # 3. Update/Insert pitching_stats
+        cursor.execute(
+            """
+            INSERT INTO pitching_stats (
+                player_id, team_id, games_pitched, games_started,
+                innings_pitched, batters_faced, number_of_pitches,
+                hits, runs, earned_runs, walks, strikeouts,
+                hit_by_pitches, left_on_base, updated_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            ON CONFLICT (player_id) DO UPDATE
+            SET games_pitched = EXCLUDED.games_pitched,
+                games_started = EXCLUDED.games_started,
+                innings_pitched = EXCLUDED.innings_pitched,
+                batters_faced = EXCLUDED.batters_faced,
+                number_of_pitches = EXCLUDED.number_of_pitches,
+                hits = EXCLUDED.hits,
+                runs = EXCLUDED.runs,
+                earned_runs = EXCLUDED.earned_runs,
+                walks = EXCLUDED.walks,
+                strikeouts = EXCLUDED.strikeouts,
+                hit_by_pitches = EXCLUDED.hit_by_pitches,
+                left_on_base = EXCLUDED.left_on_base,
+                updated_at = CURRENT_TIMESTAMP
+            RETURNING *;
+            """,
+            (
+                player_id, player_row["team_id"], stats.get("games_pitched", 0), stats.get("games_started", 0),
+                stats.get("innings_pitched", 0.0), stats.get("batters_faced", 0), stats.get("number_of_pitches", 0),
+                stats.get("hits_allowed", 0), stats.get("runs_allowed", 0), stats.get("earned_runs", 0),
+                stats.get("walks_allowed", 0), stats.get("strikeouts_thrown", 0), stats.get("hit_by_pitches_allowed", 0),
+                stats.get("left_on_base", 0)
+            )
+        )
+        pit_row = cursor.fetchone()
         conn.commit()
 
-        full_player = {**dict(player_row), **dict(stats_row)}
+        full_player = {
+            **dict(stats_row),
+            "games_pitched": pit_row["games_pitched"],
+            "games_started": pit_row["games_started"],
+            "innings_pitched": float(pit_row["innings_pitched"]),
+            "batters_faced": pit_row["batters_faced"],
+            "number_of_pitches": pit_row["number_of_pitches"],
+            "hits_allowed": pit_row["hits"],
+            "runs_allowed": pit_row["runs"],
+            "earned_runs": pit_row["earned_runs"],
+            "walks_allowed": pit_row["walks"],
+            "strikeouts_thrown": pit_row["strikeouts"],
+            "hit_by_pitches_allowed": pit_row["hit_by_pitches"],
+            "left_on_base": pit_row["left_on_base"],
+            **dict(player_row)
+        }
         return calculate_derived_stats(full_player)
     except Exception as e:
         conn.rollback()

@@ -38,6 +38,22 @@ interface Player {
     on_base_percentage: number; // Derived
     created_at: string;
     updated_at: string;
+
+    // Pitching stats
+    games_pitched: number;
+    games_started: number;
+    innings_pitched: number;
+    batters_faced: number;
+    number_of_pitches: number;
+    hits_allowed: number;
+    runs_allowed: number;
+    earned_runs: number;
+    walks_allowed: number;
+    strikeouts_thrown: number;
+    hit_by_pitches_allowed: number;
+    left_on_base: number;
+    era: number; // Derived
+    whip: number; // Derived
 }
 
 interface TeamManagerProps {
@@ -58,6 +74,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
     const [editingTeam, setEditingTeam] = useState<Team | null>(null);
     const [showAddPlayerForm, setShowAddPlayerForm] = useState(false);
     const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
+    const [subView, setSubView] = useState<'batting' | 'pitching'>('batting');
 
     // Team form inputs
     const [teamName, setTeamName] = useState('');
@@ -86,6 +103,18 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
     const [cs, setCs] = useState(0);
     const [runsScored, setRunsScored] = useState(0);
     const [rbi, setRbi] = useState(0);
+    const [gamesPitched, setGamesPitched] = useState(0);
+    const [gamesStarted, setGamesStarted] = useState(0);
+    const [inningsPitched, setInningsPitched] = useState(0.0);
+    const [battersFaced, setBattersFaced] = useState(0);
+    const [numberOfPitches, setNumberOfPitches] = useState(0);
+    const [hitsAllowed, setHitsAllowed] = useState(0);
+    const [runsAllowed, setRunsAllowed] = useState(0);
+    const [earnedRuns, setEarnedRuns] = useState(0);
+    const [walksAllowed, setWalksAllowed] = useState(0);
+    const [strikeoutsThrown, setStrikeoutsThrown] = useState(0);
+    const [hitByPitchesAllowed, setHitByPitchesAllowed] = useState(0);
+    const [leftOnBase, setLeftOnBase] = useState(0);
 
     // Import state variables
     const [importPreview, setImportPreview] = useState<any[]>([])
@@ -106,8 +135,12 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
     };
     // Derived sorted roster list
     const sortedPlayers = React.useMemo(() => {
-        if (!sortField) return players;
-        return [...players].sort((a, b) => {
+        let list = [...players];
+        if (subView === 'pitching') {
+            list = list.filter(p => p.games_pitched > 0);
+        }
+        if (!sortField) return list;
+        return list.sort((a, b) => {
             const aVal = a[sortField];
             const bVal = b[sortField];
             
@@ -122,7 +155,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
             const bNum = Number(bVal) || 0;
             return sortDirection === 'asc' ? aNum - bNum : bNum - aNum;
         });
-    }, [players, sortField, sortDirection]);
+    }, [players, sortField, sortDirection, subView]);
     const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
     const fetchTeams = async () => {
@@ -267,6 +300,20 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
         setCs(player.caught_stealing);
         setRunsScored(player.runs_scored || 0);
         setRbi(player.runs_batted_in || 0);
+
+        // Load pitching stats
+        setGamesPitched(player.games_pitched || 0);
+        setGamesStarted(player.games_started || 0);
+        setInningsPitched(player.innings_pitched || 0.0);
+        setBattersFaced(player.batters_faced || 0);
+        setNumberOfPitches(player.number_of_pitches || 0);
+        setHitsAllowed(player.hits_allowed || 0);
+        setRunsAllowed(player.runs_allowed || 0);
+        setEarnedRuns(player.earned_runs || 0);
+        setWalksAllowed(player.walks_allowed || 0);
+        setStrikeoutsThrown(player.strikeouts_thrown || 0);
+        setHitByPitchesAllowed(player.hit_by_pitches_allowed || 0);
+        setLeftOnBase(player.left_on_base || 0);
     };
 
     const handleUpdatePlayer = async (e: React.FormEvent) => {
@@ -282,7 +329,19 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                     singles: singles, doubles: doubles, triples: triples, home_runs: hr,
                     walks: bb, strikeouts: k, hit_by_pitches: hbp,
                     stolen_bases: sb, caught_stealing: cs,
-                    runs_scored: runsScored, runs_batted_in: rbi
+                    runs_scored: runsScored, runs_batted_in: rbi,
+                    games_pitched: gamesPitched,
+                    games_started: gamesStarted,
+                    innings_pitched: inningsPitched,
+                    batters_faced: battersFaced,
+                    number_of_pitches: numberOfPitches,
+                    hits_allowed: hitsAllowed,
+                    runs_allowed: runsAllowed,
+                    earned_runs: earnedRuns,
+                    walks_allowed: walksAllowed,
+                    strikeouts_thrown: strikeoutsThrown,
+                    hit_by_pitches_allowed: hitByPitchesAllowed,
+                    left_on_base: leftOnBase
                 })
             });
             if (response.ok) {
@@ -508,7 +567,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
 
     return (
         <div className="modal-overlay">
-            <div className="team-manager-card" style={{ width: activeTab === 'players' ? '1050px' : '550px', transition: 'width 0.2s ease-out' }}>
+            <div className="team-manager-card" style={{ width: activeTab === 'players' ? (subView === 'pitching' ? '1180px' : '1050px') : '550px', transition: 'width 0.2s ease-out' }}>
                 <div className="team-manager-header">
                     <div className="title-area">
                         <Users className="icon-sidebar" />
@@ -638,8 +697,9 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                 <div className="input-group" style={{ flex: 1 }}><label>Bats</label><select value={handedness} onChange={(e) => setHandedness(e.target.value)} style={{ padding: '12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)' }}><option value="Righty">Righty</option><option value="Lefty">Lefty</option><option value="Switch">Switch</option></select></div>
                             </div>
                             
-                            {/* Raw Counts Fields (Grid of stats) */}
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', borderTop: '1px dashed var(--border)', paddingTop: '12px' }}>
+                            {/* Batting Statistics section */}
+                            <h4 style={{ margin: '16px 0 8px 0', fontSize: '13px', color: 'var(--accent)', fontWeight: 'bold', borderBottom: '1px dashed var(--border)', paddingBottom: '4px', textAlign: 'left' }}>Batting Statistics</h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '16px' }}>
                                 <div className="input-group"><label>Games (GP)</label><input type="number" value={gp} onChange={(e) => setGp(parseInt(e.target.value) || 0)} /></div>
                                 <div className="input-group"><label>Plate App. (PA)</label><input type="number" value={pa} onChange={(e) => setPa(parseInt(e.target.value) || 0)} /></div>
                                 <div className="input-group"><label>At Bats (AB)</label><input type="number" value={ab} onChange={(e) => setAb(parseInt(e.target.value) || 0)} /></div>
@@ -655,6 +715,23 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                 <div className="input-group"><label>Stolen Bases (SB)</label><input type="number" value={sb} onChange={(e) => setSb(parseInt(e.target.value) || 0)} /></div>
                                 <div className="input-group"><label>Caught Stealing</label><input type="number" value={cs} onChange={(e) => setCs(parseInt(e.target.value) || 0)} /></div>
                             </div>
+
+                            {/* Pitching Statistics section */}
+                            <h4 style={{ margin: '16px 0 8px 0', fontSize: '13px', color: 'var(--accent)', fontWeight: 'bold', borderBottom: '1px dashed var(--border)', paddingBottom: '4px', textAlign: 'left' }}>Pitching Statistics</h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '16px' }}>
+                                <div className="input-group"><label>Games Pitched (GP)</label><input type="number" min="0" value={gamesPitched} onChange={(e) => setGamesPitched(parseInt(e.target.value) || 0)} /></div>
+                                <div className="input-group"><label>Innings Pitched (IP)</label><input type="number" step="0.1" min="0" value={inningsPitched} onChange={(e) => setInningsPitched(parseFloat(e.target.value) || 0)} /></div>
+                                <div className="input-group"><label>Games Started (GS)</label><input type="number" min="0" value={gamesStarted} onChange={(e) => setGamesStarted(parseInt(e.target.value) || 0)} /></div>
+                                <div className="input-group"><label>Batters Faced (BF)</label><input type="number" min="0" value={battersFaced} onChange={(e) => setBattersFaced(parseInt(e.target.value) || 0)} /></div>
+                                <div className="input-group"><label>Pitches (#P)</label><input type="number" min="0" value={numberOfPitches} onChange={(e) => setNumberOfPitches(parseInt(e.target.value) || 0)} /></div>
+                                <div className="input-group"><label>Hits Allowed (H)</label><input type="number" min="0" value={hitsAllowed} onChange={(e) => setHitsAllowed(parseInt(e.target.value) || 0)} /></div>
+                                <div className="input-group"><label>Runs Allowed (R)</label><input type="number" min="0" value={runsAllowed} onChange={(e) => setRunsAllowed(parseInt(e.target.value) || 0)} /></div>
+                                <div className="input-group"><label>Earned Runs (ER)</label><input type="number" min="0" value={earnedRuns} onChange={(e) => setEarnedRuns(parseInt(e.target.value) || 0)} /></div>
+                                <div className="input-group"><label>Walks Allowed (BB)</label><input type="number" min="0" value={walksAllowed} onChange={(e) => setWalksAllowed(parseInt(e.target.value) || 0)} /></div>
+                                <div className="input-group"><label>Strikeouts Thrown (SO)</label><input type="number" min="0" value={strikeoutsThrown} onChange={(e) => setStrikeoutsThrown(parseInt(e.target.value) || 0)} /></div>
+                                <div className="input-group"><label>HBP Allowed</label><input type="number" min="0" value={hitByPitchesAllowed} onChange={(e) => setHitByPitchesAllowed(parseInt(e.target.value) || 0)} /></div>
+                                <div className="input-group"><label>Left on Base (LOB)</label><input type="number" min="0" value={leftOnBase} onChange={(e) => setLeftOnBase(parseInt(e.target.value) || 0)} /></div>
+                            </div>
                             
                             <div className="form-actions" style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
                                 <button type="submit" className="btn-primary" style={{ flex: 1 }}>Save Stats</button>
@@ -664,9 +741,47 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                     ) : (
                         <div className="players-list-area">
                             <div className="list-subheader" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                                <h3 style={{ margin: 0, fontSize: '16px', color: 'var(--text-h)' }}>
-                                    Team Players {selectedTeamId && ` - ${teams.find(t => t.id === selectedTeamId)?.team_name}`}
-                                </h3>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                                    <h3 style={{ margin: 0, fontSize: '16px', color: 'var(--text-h)' }}>
+                                        Team Players {selectedTeamId && ` - ${teams.find(t => t.id === selectedTeamId)?.team_name}`}
+                                    </h3>
+                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                        <button 
+                                            type="button"
+                                            onClick={() => { setSubView('batting'); setSortField(null); }} 
+                                            className={`tab-btn ${subView === 'batting' ? 'active' : ''}`}
+                                            style={{ 
+                                                padding: '4px 10px', 
+                                                background: subView === 'batting' ? 'var(--accent-bg)' : 'transparent', 
+                                                border: '1px solid ' + (subView === 'batting' ? 'var(--accent)' : 'var(--border)'),
+                                                color: subView === 'batting' ? 'var(--accent)' : 'var(--text)', 
+                                                cursor: 'pointer', 
+                                                borderRadius: '6px', 
+                                                fontSize: '12px',
+                                                fontWeight: 'bold' 
+                                            }}
+                                        >
+                                            Batting
+                                        </button>
+                                        <button 
+                                            type="button"
+                                            onClick={() => { setSubView('pitching'); setSortField(null); }} 
+                                            className={`tab-btn ${subView === 'pitching' ? 'active' : ''}`}
+                                            style={{ 
+                                                padding: '4px 10px', 
+                                                background: subView === 'pitching' ? 'var(--accent-bg)' : 'transparent', 
+                                                border: '1px solid ' + (subView === 'pitching' ? 'var(--accent)' : 'var(--border)'),
+                                                color: subView === 'pitching' ? 'var(--accent)' : 'var(--text)', 
+                                                cursor: 'pointer', 
+                                                borderRadius: '6px', 
+                                                fontSize: '12px',
+                                                fontWeight: 'bold' 
+                                            }}
+                                        >
+                                            Pitching
+                                        </button>
+                                    </div>
+                                </div>
                                 <div style={{ display: 'flex', gap: '8px' }}>
                                     <label className="btn-guest" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer', padding: '8px 12px' }}>
                                         <Plus size={14} /> Import GC Stats
@@ -698,39 +813,88 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                                 <th onClick={() => handleSort('handedness')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
                                                     Bats {sortField === 'handedness' && (sortDirection === 'asc' ? '↑' : '↓')}
                                                 </th>
-                                                <th onClick={() => handleSort('games_played')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
-                                                    GP {sortField === 'games_played' && (sortDirection === 'asc' ? '↑' : '↓')}
-                                                </th>
-                                                <th onClick={() => handleSort('plate_appearances')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
-                                                    PA {sortField === 'plate_appearances' && (sortDirection === 'asc' ? '↑' : '↓')}
-                                                </th>
-                                                <th onClick={() => handleSort('at_bats')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
-                                                    AB {sortField === 'at_bats' && (sortDirection === 'asc' ? '↑' : '↓')}
-                                                </th>
-                                                <th onClick={() => handleSort('hits')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
-                                                    H {sortField === 'hits' && (sortDirection === 'asc' ? '↑' : '↓')}
-                                                </th>
-                                                <th onClick={() => handleSort('walks')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
-                                                    BB {sortField === 'walks' && (sortDirection === 'asc' ? '↑' : '↓')}
-                                                </th>
-                                                <th onClick={() => handleSort('strikeouts')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
-                                                    K {sortField === 'strikeouts' && (sortDirection === 'asc' ? '↑' : '↓')}
-                                                </th>
-                                                <th onClick={() => handleSort('runs_scored')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
-                                                    R {sortField === 'runs_scored' && (sortDirection === 'asc' ? '↑' : '↓')}
-                                                </th>
-                                                <th onClick={() => handleSort('runs_batted_in')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
-                                                    RBI {sortField === 'runs_batted_in' && (sortDirection === 'asc' ? '↑' : '↓')}
-                                                </th>
-                                                <th onClick={() => handleSort('stolen_bases')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
-                                                    SB {sortField === 'stolen_bases' && (sortDirection === 'asc' ? '↑' : '↓')}
-                                                </th>
-                                                <th onClick={() => handleSort('batting_average')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
-                                                    AVG {sortField === 'batting_average' && (sortDirection === 'asc' ? '↑' : '↓')}
-                                                </th>
-                                                <th onClick={() => handleSort('on_base_percentage')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
-                                                    OBP {sortField === 'on_base_percentage' && (sortDirection === 'asc' ? '↑' : '↓')}
-                                                </th>
+                                                {subView === 'batting' ? (
+                                                    <>
+                                                        <th onClick={() => handleSort('games_played')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            GP {sortField === 'games_played' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('plate_appearances')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            PA {sortField === 'plate_appearances' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('at_bats')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            AB {sortField === 'at_bats' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('hits')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            H {sortField === 'hits' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('walks')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            BB {sortField === 'walks' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('strikeouts')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            K {sortField === 'strikeouts' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('runs_scored')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            R {sortField === 'runs_scored' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('runs_batted_in')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            RBI {sortField === 'runs_batted_in' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('stolen_bases')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            SB {sortField === 'stolen_bases' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('batting_average')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            AVG {sortField === 'batting_average' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('on_base_percentage')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            OBP {sortField === 'on_base_percentage' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <th onClick={() => handleSort('games_pitched')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            GP {sortField === 'games_pitched' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('innings_pitched')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            IP {sortField === 'innings_pitched' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('games_started')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            GS {sortField === 'games_started' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('batters_faced')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            BF {sortField === 'batters_faced' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('number_of_pitches')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            #P {sortField === 'number_of_pitches' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('hits_allowed')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            H {sortField === 'hits_allowed' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('runs_allowed')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            R {sortField === 'runs_allowed' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('earned_runs')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            ER {sortField === 'earned_runs' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('walks_allowed')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            BB {sortField === 'walks_allowed' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('strikeouts_thrown')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            SO {sortField === 'strikeouts_thrown' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('hit_by_pitches_allowed')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            HBP {sortField === 'hit_by_pitches_allowed' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('era')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            ERA {sortField === 'era' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('whip')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            WHIP {sortField === 'whip' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('left_on_base')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            LOB {sortField === 'left_on_base' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                    </>
+                                                )}
                                                 <th style={{ padding: '10px 12px', textAlign: 'center', userSelect: 'none' }}>Actions</th>
                                             </tr>
                                         </thead>
@@ -740,21 +904,46 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                                     <td style={{ padding: '10px 12px', fontWeight: 'bold' }}>{p.player_number}</td>
                                                     <td style={{ padding: '10px 12px', color: 'var(--text-h)', fontWeight: '500' }}>{p.player_name}</td>
                                                     <td style={{ padding: '10px 12px' }}>{p.handedness[0]}</td>
-                                                    <td style={{ padding: '10px 12px' }}>{p.games_played}</td>
-                                                    <td style={{ padding: '10px 12px' }}>{p.plate_appearances}</td>
-                                                    <td style={{ padding: '10px 12px' }}>{p.at_bats}</td>
-                                                    <td style={{ padding: '10px 12px', fontWeight: 'bold' }}>{p.hits}</td>
-                                                    <td style={{ padding: '10px 12px' }}>{p.walks}</td>
-                                                    <td style={{ padding: '10px 12px' }}>{p.strikeouts}</td>
-                                                    <td style={{ padding: '10px 12px' }}>{p.runs_scored}</td>
-                                                    <td style={{ padding: '10px 12px' }}>{p.runs_batted_in}</td>
-                                                    <td style={{ padding: '10px 12px' }}>{p.stolen_bases}</td>
-                                                    <td style={{ padding: '10px 12px', color: 'var(--accent)', fontWeight: 'bold' }}>
-                                                        {p.batting_average.toFixed(3).replace(/^0+/, '')}
-                                                    </td>
-                                                    <td style={{ padding: '10px 12px', color: 'var(--accent)', fontWeight: 'bold' }}>
-                                                        {p.on_base_percentage.toFixed(3).replace(/^0+/, '')}
-                                                    </td>
+                                                    {subView === 'batting' ? (
+                                                        <>
+                                                            <td style={{ padding: '10px 12px' }}>{p.games_played}</td>
+                                                            <td style={{ padding: '10px 12px' }}>{p.plate_appearances}</td>
+                                                            <td style={{ padding: '10px 12px' }}>{p.at_bats}</td>
+                                                            <td style={{ padding: '10px 12px', fontWeight: 'bold' }}>{p.hits}</td>
+                                                            <td style={{ padding: '10px 12px' }}>{p.walks}</td>
+                                                            <td style={{ padding: '10px 12px' }}>{p.strikeouts}</td>
+                                                            <td style={{ padding: '10px 12px' }}>{p.runs_scored}</td>
+                                                            <td style={{ padding: '10px 12px' }}>{p.runs_batted_in}</td>
+                                                            <td style={{ padding: '10px 12px' }}>{p.stolen_bases}</td>
+                                                            <td style={{ padding: '10px 12px', color: 'var(--accent)', fontWeight: 'bold' }}>
+                                                                {p.batting_average.toFixed(3).replace(/^0+/, '')}
+                                                            </td>
+                                                            <td style={{ padding: '10px 12px', color: 'var(--accent)', fontWeight: 'bold' }}>
+                                                                {p.on_base_percentage.toFixed(3).replace(/^0+/, '')}
+                                                            </td>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <td style={{ padding: '10px 12px' }}>{p.games_pitched}</td>
+                                                            <td style={{ padding: '10px 12px' }}>{p.innings_pitched.toFixed(1)}</td>
+                                                            <td style={{ padding: '10px 12px' }}>{p.games_started}</td>
+                                                            <td style={{ padding: '10px 12px' }}>{p.batters_faced}</td>
+                                                            <td style={{ padding: '10px 12px' }}>{p.number_of_pitches}</td>
+                                                            <td style={{ padding: '10px 12px' }}>{p.hits_allowed}</td>
+                                                            <td style={{ padding: '10px 12px' }}>{p.runs_allowed}</td>
+                                                            <td style={{ padding: '10px 12px' }}>{p.earned_runs}</td>
+                                                            <td style={{ padding: '10px 12px' }}>{p.walks_allowed}</td>
+                                                            <td style={{ padding: '10px 12px' }}>{p.strikeouts_thrown}</td>
+                                                            <td style={{ padding: '10px 12px' }}>{p.hit_by_pitches_allowed}</td>
+                                                            <td style={{ padding: '10px 12px', color: 'var(--accent)', fontWeight: 'bold' }}>
+                                                                {p.era.toFixed(2)}
+                                                            </td>
+                                                            <td style={{ padding: '10px 12px', color: 'var(--accent)', fontWeight: 'bold' }}>
+                                                                {p.whip.toFixed(2)}
+                                                            </td>
+                                                            <td style={{ padding: '10px 12px' }}>{p.left_on_base}</td>
+                                                        </>
+                                                    )}
                                                     <td style={{ padding: '10px 12px', display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
                                                         <button onClick={() => startEditingPlayer(p)} className="btn-edit-team-pencil" style={{ background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer', padding: '4px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center' }}>
                                                             <Pencil size={14} />

@@ -83,6 +83,20 @@ class PlayerUpdateRequest(BaseModel):
     runs_scored: int
     runs_batted_in: int
 
+    # Pitching stats
+    games_pitched: int = 0
+    games_started: int = 0
+    innings_pitched: float = 0.0
+    batters_faced: int = 0
+    number_of_pitches: int = 0
+    hits_allowed: int = 0
+    runs_allowed: int = 0
+    earned_runs: int = 0
+    walks_allowed: int = 0
+    strikeouts_thrown: int = 0
+    hit_by_pitches_allowed: int = 0
+    left_on_base: int = 0
+
 class BulkImportPlayer(BaseModel):
     player_name: str
     player_number: int
