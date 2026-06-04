@@ -4,6 +4,7 @@ import type { CoachProfile } from '../App';
 
 interface ChatAreaProps {
     userProfile: CoachProfile | null;
+    selectedTeamId?: number | null;
 }
 
 interface Message {
@@ -12,7 +13,7 @@ interface Message {
     sources?: string[];
 }
 
-export default function ChatArea({ userProfile }: ChatAreaProps) {
+export default function ChatArea({ userProfile, selectedTeamId }: ChatAreaProps) {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState('');
     const [generating, setGenerating] = useState(false);
@@ -57,6 +58,8 @@ export default function ChatArea({ userProfile }: ChatAreaProps) {
                     age_group: customDivision || userProfile?.age_group || "8U Division",
                     coach_name: userProfile?.coach_name || "Guest Coach",
                     location: userProfile?.location || "General Location",
+                    coach_id: userProfile?.id,
+                    selected_team_id: selectedTeamId || null,
                 }),
             });
 
