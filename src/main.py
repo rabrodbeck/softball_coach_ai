@@ -12,8 +12,10 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",                # local react dev server
-        "https://softball-coach-ai.vercel.app"  # production react site
+        "https://softball-coach-ai.vercel.app", # old production react site
+        "https://softball-coach.vercel.app"     # new production react site
     ],
+    allow_origin_regex="https://softball-coach-.*\\.vercel\\.app", # allows any Vercel preview url
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
