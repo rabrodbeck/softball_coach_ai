@@ -137,14 +137,16 @@ def build_agent_executor(coach_id: int, selected_team_id: int | None = None):
         try:
             # SECURITY VERIFICATION: Ensure the requested team belongs to the active coach
             my_teams = get_coach_teams(coach_id)
-            if not any(t["id"] == team_id for t in my_teams):
+            matching_team = next((t for t in my_teams if t["id"] == team_id), None)
+            if not matching_team:
                 return f"Error: You do not have permission to view stats for Team ID {team_id}."
             
+            team_name = matching_team["team_name"]
             players = get_team_players(team_id)
             if not players:
-                return "This team has no players in the roster."
+                return f"The team '{team_name}' has no players in the roster."
                 
-            output = [f"Roster and Statistics for Team ID {team_id}:"]
+            output = [f"Roster and Statistics for the team '{team_name}':"]
             for p in players:
                 # Format batting stats
                 batting = (
