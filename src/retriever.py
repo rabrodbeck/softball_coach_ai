@@ -150,16 +150,23 @@ def build_agent_executor(coach_id: int, selected_team_id: int | None = None):
                 batting = (
                     f"Batting: GP={p.get('games_played', 0)}, PA={p.get('plate_appearances', 0)}, "
                     f"AB={p.get('at_bats', 0)}, H={p.get('hits', 0)}, AVG={p.get('batting_average', 0.0):.3f}, "
-                    f"OBP={p.get('on_base_percentage', 0.0):.3f}, HR={p.get('home_runs', 0)}, RBI={p.get('runs_batted_in', 0)}"
+                    f"OBP={p.get('on_base_percentage', 0.0):.3f}, HR={p.get('home_runs', 0)}, RBI={p.get('runs_batted_in', 0)}, "
+                    f"R={p.get('runs_scored', 0)}, BB={p.get('walks', 0)}, SO={p.get('strikeouts', 0)}, "
+                    f"HBP={p.get('hit_by_pitches', 0)}, SB={p.get('stolen_bases', 0)}, CS={p.get('caught_stealing', 0)}, "
+                    f"1B={p.get('singles', 0)}, 2B={p.get('doubles', 0)}, 3B={p.get('triples', 0)}"
                 )
                 
                 # Format pitching stats (only if they have pitching appearances)
                 pitching = ""
                 if p.get("games_pitched", 0) > 0:
                     pitching = (
-                        f" | Pitching: GP={p.get('games_pitched')}, IP={p.get('innings_pitched', 0.0):.1f}, "
-                        f"ERA={p.get('era', 0.0):.2f}, WHIP={p.get('whip', 0.0):.2f}, SO={p.get('strikeouts_thrown', 0)}, "
-                        f"BB={p.get('walks_allowed', 0)}"
+                        f" | Pitching: GamesPitched={p.get('games_pitched', 0)}, GamesStarted={p.get('games_started', 0)}, "
+                        f"InningsPitched={p.get('innings_pitched', 0.0):.1f}, BattersFaced={p.get('batters_faced', 0)}, "
+                        f"Pitches={p.get('number_of_pitches', 0)}, HitsAllowed={p.get('hits_allowed', 0)}, "
+                        f"RunsAllowed={p.get('runs_allowed', 0)}, EarnedRuns={p.get('earned_runs', 0)}, "
+                        f"WalksAllowed={p.get('walks_allowed', 0)}, StrikeoutsThrown={p.get('strikeouts_thrown', 0)}, "
+                        f"HitBatters={p.get('hit_by_pitches_allowed', 0)}, LeftOnBase={p.get('left_on_base', 0)}, "
+                        f"ERA={p.get('era', 0.0):.2f}, WHIP={p.get('whip', 0.0):.2f}"
                     )
                 output.append(f"- **{p['player_name']}** (Jersey #{p['player_number']}, Bats: {p['handedness']}) - {batting}{pitching}")
             return "\n".join(output)
