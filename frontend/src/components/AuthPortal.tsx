@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import { Key, Mail, User, MapPin, Trophy, ShieldAlert, CheckCircle } from 'lucide-react';
 import type { CoachProfile } from '../App';
+import { auth, googleProvider } from '../firebase';
+import { signInWithPopup } from 'firebase/auth';
 
-interface AuthPortalProps{
+interface AuthPortalProps {
     onLoginSuccess: (profile: CoachProfile) => void;
     onContinueAsGuest: () => void;
 }
 
-type AuthMode = 'menu' | 'login' | 'register';
+type AuthMode = 'menu' | 'login' | 'register' | 'google-complete';
 
 export default function AuthPortal({ onLoginSuccess, onContinueAsGuest }: AuthPortalProps) {
     const [mode, setMode] = useState<AuthMode>('menu');
@@ -22,6 +24,81 @@ export default function AuthPortal({ onLoginSuccess, onContinueAsGuest }: AuthPo
 
     // Set the base URL of the FastAPI backend (running locally or in the cloud)
     const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+    const handleGoogleSignIn = async () => {
+        setError(null);
+        setLoading(true);
+        try {
+            const result = await signInWithPopup(auth, googleProvider);
+            const userEmail = result.user.email;
+            const userDisplayName = result.user.displayName || 'Coach';
+
+            if (!userEmail) {
+                throw new Error("Could not retrieve email from Google Account.");
+            }
+
+            // Call backend check endpoint
+            const response = await fetch(`${API_BASE}/api/auth/google-login`, {
+                method: 'POST',
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email: userEmail, display_name: userDisplayName }),
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to authenticate with backend.");
+            }
+
+            const data = await response.json();
+            if (data.registered) {
+                // Coach exists, proceed to dashboard
+                onLoginSuccess(data.user);
+            } else {
+                // Coach does not exist, go to profile completion state
+                setEmail(userEmail);
+                setCoachName(userDisplayName);
+                setMode('google-complete');
+            }
+        } catch (err: any) {
+            setError(err.message || "Google Sign-In failed.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleGoogleRegister = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!email || !coachName || !location) {
+            setError("All fields required.");
+            return;
+        }
+        setError(null);
+        setLoading(true);
+
+        try {
+            const response = await fetch(`${API_BASE}/api/auth/google-register`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    email,
+                    coach_name: coachName,
+                    location,
+                    age_group: ageGroup,
+                }),
+            });
+
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.detail || "Google registration failed.");
+            }
+
+            const profile = await response.json();
+            onLoginSuccess(profile);
+        } catch (err: any) {
+            setError(err.message || "Google registration failed.");
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -49,7 +126,7 @@ export default function AuthPortal({ onLoginSuccess, onContinueAsGuest }: AuthPo
             onLoginSuccess(profile);
 
         } catch (err: any) {
-            setError(err.message || "Server connectin failed.");
+            setError(err.message || "Server connection failed.");
         } finally {
             setLoading(false)
         }        
@@ -87,7 +164,7 @@ export default function AuthPortal({ onLoginSuccess, onContinueAsGuest }: AuthPo
                 setSuccess(null);
                 setMode("login");
             }, 2000);
-        } catch (err:any) {
+        } catch (err: any) {
             setError(err.message || "Registration failed.");
         } finally {
             setLoading(false);
@@ -118,12 +195,39 @@ export default function AuthPortal({ onLoginSuccess, onContinueAsGuest }: AuthPo
                 )}
 
                 {mode === "menu" && (
-                    <div className="auth-menu-grid">
-                        <button onClick={() => setMode("login")} className="btn-primary">
-                            🗝️ Log In
+                    <div className="auth-menu-grid" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        <button 
+                            onClick={handleGoogleSignIn} 
+                            className="btn-primary" 
+                            style={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'center', 
+                                gap: '10px',
+                                background: '#4285F4',
+                                color: 'white',
+                                border: 'none'
+                            }} 
+                            disabled={loading}
+                        >
+                            <svg width="18" height="18" viewBox="0 0 18 18" style={{ fill: 'white' }}>
+                                <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z" fill="#4285F4"/>
+                                <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z" fill="#34A853"/>
+                                <path d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707s.102-1.167.282-1.707V4.961H.957A8.996 8.996 0 0 0 0 9c0 1.452.348 2.827.957 4.039l3.007-2.332z" fill="#FBBC05"/>
+                                <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.806 11.426 0 9 0 5.485 0 2.443 2.017.957 4.961l3.007 2.332C4.672 5.164 6.656 3.58 9 3.58z" fill="#EA4335"/>
+                            </svg>
+                            Sign In with Google
+                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', margin: '8px 0' }}>
+                            <div style={{ flex: 1, height: '1px', background: 'var(--border)' }}></div>
+                            <span style={{ padding: '0 8px', fontSize: '12px', color: 'var(--text)' }}>or continue with</span>
+                            <div style={{ flex: 1, height: '1px', background: 'var(--border)' }}></div>
+                        </div>
+                        <button onClick={() => setMode("login")} className="btn-secondary">
+                            🗝️ Log In with Email
                         </button>
                         <button onClick={() => setMode("register")} className="btn-secondary">
-                            📋 Create Profile
+                            📋 Create Email Profile
                         </button>
                         <button onClick={onContinueAsGuest} className="btn-guest">
                             🥎 Continue as Guest
@@ -221,6 +325,52 @@ export default function AuthPortal({ onLoginSuccess, onContinueAsGuest }: AuthPo
                             </button>
                             <button type="button" onClick={() => setMode("menu")} className="btn-secondary">
                                 ⬅️ Back
+                            </button>
+                        </div>
+                    </form>
+                )}
+
+                {mode === "google-complete" && (
+                    <form onSubmit={handleGoogleRegister} className="auth-form">
+                        <div style={{ marginBottom: '16px', textAlign: 'center' }}>
+                            <h3 style={{ margin: '0 0 8px 0', color: 'var(--text-h)' }}>Complete Your Coach Profile</h3>
+                            <p style={{ fontSize: '13px', margin: 0 }}>We just need a few details to tailor your fastpitch softball playbook.</p>
+                        </div>
+                        <div className="input-group">
+                            <label><User className="input-icon" /> Coach Full Name</label>
+                            <input
+                                type="text"
+                                value={coachName}
+                                onChange={(e) => setCoachName(e.target.value)}
+                                placeholder="Coach Name"
+                                required
+                            />
+                        </div>
+                        <div className="input-group">
+                            <label><MapPin className="input-icon" /> Your Location</label>
+                            <input 
+                                type="text"
+                                value={location}
+                                onChange={(e) => setLocation(e.target.value)}
+                                placeholder="City, State"
+                                required
+                            />
+                        </div>
+                        <div className="input-group">
+                            <label><Trophy className="input-icon" /> Primary Age Group Coached</label>
+                            <select value={ageGroup} onChange={(e) => setAgeGroup(e.target.value)}>
+                                <option value="8U Division">8U Division</option>
+                                <option value="10U Division">10U Division</option>
+                                <option value="12U Division">12U Division</option>
+                                <option value="14U Division">14U Division</option>
+                            </select>
+                        </div>
+                        <div className="form-actions">
+                            <button type="submit" className="btn-primary" disabled={loading}>
+                                {loading ? "Saving Profile..." : "Complete Setup"}
+                            </button>
+                            <button type="button" onClick={() => setMode("menu")} className="btn-secondary">
+                                Cancel
                             </button>
                         </div>
                     </form>

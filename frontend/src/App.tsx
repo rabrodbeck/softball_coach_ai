@@ -4,6 +4,8 @@ import SideBar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
 import TeamManager from './components/TeamManager';
 import { Trophy, Menu, Users } from 'lucide-react';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { auth } from './firebase'
 
 export interface CoachProfile {
   id: number;
@@ -42,7 +44,38 @@ function App() {
     }
   }, [user]);
 
-  const handleLogOut = () => {
+  // Handle firebase session persistence auto-login
+  useEffect(() => {
+    const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser && firebaseUser.email) {
+        try {
+          const res = await fetch(`${API_BASE}/api/auth/google-login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: firebaseUser.email,
+              display_name: firebaseUser.displayName || ""
+            })
+          });
+          const data = await res.json();
+          if (data.registered) {
+            setUser(data.user);
+          }
+        } catch (err) {
+          console.error("Auto-login validation failed:", err);
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleLogOut = async () => {
+    try {
+      await signOut(auth);
+    } catch (e) {
+      console.error("Firebase sign out failed:", e);
+    }
     setUser(null);
     setIsGuest(false);
     setSelectedTeam(null);
