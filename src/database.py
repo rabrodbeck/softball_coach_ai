@@ -656,3 +656,22 @@ def bulk_update_player_stats(team_id: int, updates: list):
     finally:
         cursor.close()
         conn.close()
+
+def get_coach_by_email(email: str):
+    """Retrieves a coach profile by their email address."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            SELECT id, username, coach_name, location, primary_age_group
+            FROM coaches
+            WHERE username = %s
+            """,
+            (email.lower().strip(),)
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        cursor.close()
+        conn.close()
