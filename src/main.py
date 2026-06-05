@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, EmailStr
 from src.retriever import build_chain, build_agent_executor
-from src.database import authenticate_coach, register_coach, create_team, get_coach_teams, set_active_team, update_team, add_player, get_team_players, update_player_stats, delete_player, bulk_update_player_stats, get_coach_by_email
+from src.database import get_coach_by_email, authenticate_coach, register_coach, create_team, get_coach_teams, set_active_team, update_team, add_player, get_team_players, update_player_stats, delete_player, bulk_update_player_stats
 
 app = FastAPI(title = "🥎 Softball Coach AI API")
 
@@ -30,6 +30,17 @@ class RegisterRequest(BaseModel):
     coach_name: str
     location: str
     age_group: str
+
+class GoogleLoginRequest(BaseModel):
+    email: EmailStr
+    display_name: str
+
+class GoogleRegisterRequest(BaseModel):
+    email: EmailStr
+    coach_name: str
+    location: str
+    age_group: str
+
 
 class ChatRequest(BaseModel):
     question: str
@@ -135,15 +146,7 @@ class BulkImportRequest(BaseModel):
     team_id: int
     players: list[BulkImportPlayer]
 
-class GoogleLoginRequest(BaseModel):
-    email: str
-    display_name: str
 
-class GoogleRegisterRequest(BaseModel):
-    email: str
-    coach_name: str
-    location: str
-    age_group: str
 
 # 2. Authentication API routes
 @app.post("/api/auth/register")
@@ -161,6 +164,33 @@ def api_login(data: LoginRequest):
     if not user:
         raise HTTPException(status_code=401, detail="Invalid username or password")
     return user
+
+@app.post("/api/auth/google-login")
+def api_google_login(data: GoogleLoginRequest):
+    user = get_coach_by_email(data.email)
+    if user:
+        return {
+            "registered": True,
+            "user": user
+        }
+    return {
+        "registered": False,
+        "email": data.email
+    }
+
+@app.post("/api/auth/google-register")
+def api_google_register(data: GoogleRegisterRequest):
+    success = register_coach(
+        username=data.email,
+        password="GOOGLE_AUTH_DUMMY_PASSWORD",
+        coach_name=data.coach_name,
+        location=data.location,
+        age_group=data.age_group
+    )
+    if not success:
+        raise HTTPException(status_code=400, detail="Google registration failed")
+    
+    return get_coach_by_email(data.email)
 
 # 3. AI RAG Chat Route (Streaming response)
 chain = build_chain()

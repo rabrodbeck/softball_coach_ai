@@ -5,7 +5,7 @@ import ChatArea from './components/ChatArea';
 import TeamManager from './components/TeamManager';
 import { Trophy, Menu, Users } from 'lucide-react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { auth } from './firebase'
+import { auth } from './firebase';
 
 export interface CoachProfile {
   id: number;
@@ -44,7 +44,7 @@ function App() {
     }
   }, [user]);
 
-  // Handle firebase session persistence auto-login
+  // Handle Firebase session persistence auto-login
   useEffect(() => {
     const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {

@@ -77,6 +77,26 @@ def authenticate_coach(username, password):
         }
     return None
 
+def get_coach_by_email(email: str):
+    """Retrieves a coach's profile details by their email/username address."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            SELECT id, username, coach_name, location, primary_age_group
+            FROM coaches
+            WHERE username = %s
+            """,
+            (email.lower().strip(),)
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+    finally:
+        cursor.close()
+        conn.close()
+
+
 def is_valid_email(email):
     """Checks if th euser name matches a standard email format."""
     email_regex = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
