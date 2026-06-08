@@ -17,7 +17,7 @@ except Exception as e:
 
 try:
     print("\nTesting add_player(3, 'Test Player', 99, 'Right')...")
-    player = add_player(3, 'Test Player', 99, 'Right')
+    player = add_player(3, 'Test Player', 99, 'Right', 'Right')
     print("Success! Created player ID:", player["id"])
 except Exception as e:
     import traceback
