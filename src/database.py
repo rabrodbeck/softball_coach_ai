@@ -229,26 +229,41 @@ def convert_ip_to_actual(ip: float) -> float:
     return float(whole)
 
 def calculate_derived_pitching_stats(stats: dict):
-    """Calculates ERA and WHIP based on softball 7-inning rules."""
+    """Calculates ERA, WHIP, K/7, BB/7, pitches per inning, and K/BB ratio based on 7-inning game."""
     ip = float(stats.get("innings_pitched", 0.0))
     er = stats.get("earned_runs", 0)
-    bb = stats.get("walks_allowed", 0)       # Use walks_allowed to avoid conflict with batting walks
-    hits = stats.get("hits_allowed", 0)      # Use hits_allowed to avoid conflict with batting hits
+    bb = stats.get("walks_allowed", 0)
+    hits = stats.get("hits_allowed", 0)
+    so = stats.get("strikeouts_thrown", 0)
+    pitches = stats.get("number_of_pitches", 0)
 
-    # 1. Convert innings pitched to actual float value using helper
+    # 1. Convert innings pitches to actual float value using helper (converting fractions to decimals)
     actual_ip = convert_ip_to_actual(ip)
 
-    # 2. Calculate ERA and WHIP (initializing variables in all branches)
+    # 2. Calculate ERA, WHIP, K/7, BB/7, and Pitches/Inning
     if actual_ip > 0:
         era = (er * 7.0) / actual_ip
         whip = (bb + hits) / actual_ip
+        k7 = (so * 7) / actual_ip
+        bb7 = (bb * 7.0) / actual_ip
+        pitches_per_inning = pitches / actual_ip
     else:
         era = 0.0
         whip = 0.0
+        k7 = 0.0
+        bb7 = 0.0
+        pitcher_per_inning = 0
+
+    # 3. Calculate strikeout to walk ratio
+    k_bb_ratio = so / bb if bb > 0 else float(so)
 
     result = dict(stats)
     result["era"] = round(era, 2)
     result["whip"] = round(whip, 2)
+    result["k7"] = round(k7, 2)
+    result["bb7"] = round(bb7, 2)
+    result["pitches_per_inning"] = round(pitches_per_inning, 1)
+    result["k_bb_ratio"] = round(k_bb_ratio, 1)
     return result
 
 def calculate_derived_stats(player: dict):
