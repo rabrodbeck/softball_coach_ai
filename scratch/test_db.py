@@ -16,8 +16,8 @@ except Exception as e:
     traceback.print_exc()
 
 try:
-    print("\nTesting add_player(3, 'Test Player', 99, 'Righty')...")
-    player = add_player(3, 'Test Player', 99, 'Righty')
+    print("\nTesting add_player(3, 'Test Player', 99, 'Right')...")
+    player = add_player(3, 'Test Player', 99, 'Right')
     print("Success! Created player ID:", player["id"])
 except Exception as e:
     import traceback

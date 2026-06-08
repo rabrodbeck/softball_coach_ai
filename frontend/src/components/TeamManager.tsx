@@ -10,6 +10,7 @@ interface Team {
     ties: number;
     is_active: boolean;
     age_group: string;
+    innings_per_game: number;
 }
 
 interface Player {
@@ -17,7 +18,8 @@ interface Player {
     team_id: number;
     player_name: string;
     player_number: number;
-    handedness: string;
+    batting_hand: string;
+    throwing_hand: string;
     games_played: number;
     parent_player_id?: number | null;
     plate_appearances: number;
@@ -56,6 +58,15 @@ interface Player {
     whip: number; // Derived
 }
 
+const normalizeHand = (h: string | null | undefined, fallback = 'Right'): string => {
+    if (!h) return fallback;
+    const clean = h.trim().toLowerCase();
+    if (clean === 'righty' || clean === 'right') return 'Right';
+    if (clean === 'lefty' || clean === 'left') return 'Left';
+    if (clean === 'switch') return 'Switch';
+    return fallback;
+};
+
 interface TeamManagerProps {
     coachId: number;
     onClose: () => void;
@@ -85,11 +96,13 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
     const [losses, setLosses] = useState(0);
     const [ties, setTies] = useState(0);
     const [isActive, setIsActive] = useState(false);
+    const [inningsPerGame, setInningsPerGame] = useState(7);
 
     // Player form inputs
     const [playerName, setPlayerName] = useState('');
     const [playerNumber, setPlayerNumber] = useState(0);
-    const [handedness, setHandedness] = useState('Righty');
+    const [battingHand, setBattingHand] = useState('Right');
+    const [throwingHand, setThrowingHand] = useState('Right');
     const [gp, setGp] = useState(0);
     const [pa, setPa] = useState(0);
     const [ab, setAb] = useState(0);
@@ -219,7 +232,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
             const response = await fetch(`${API_BASE}/api/teams`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ coach_id: coachId, team_name: teamName, season: season, age_group: ageGroup })
+                body: JSON.stringify({ coach_id: coachId, team_name: teamName, season: season, age_group: ageGroup, innings_per_game: inningsPerGame })
             });
             if (response.ok) {
                 setTeamName('');
@@ -241,6 +254,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
         setLosses(team.losses);
         setTies(team.ties);
         setIsActive(team.is_active);
+        setInningsPerGame(team.innings_per_game || 7);
     };
 
     const handleUpdateTeam = async (e: React.FormEvent) => {
@@ -250,7 +264,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
             const response = await fetch(`${API_BASE}/api/teams/${editingTeam.id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ coach_id: coachId, team_name: teamName, season: season, wins: wins, losses: losses, ties: ties, age_group: ageGroup, is_active: isActive })
+                body: JSON.stringify({ coach_id: coachId, team_name: teamName, season: season, wins: wins, losses: losses, ties: ties, age_group: ageGroup, is_active: isActive, innings_per_game: inningsPerGame })
             });
             if (response.ok) {
                 setEditingTeam(null);
@@ -269,7 +283,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
             const response = await fetch(`${API_BASE}/api/players`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ team_id: selectedTeamId, player_name: playerName, player_number: playerNumber, handedness: handedness })
+                body: JSON.stringify({ team_id: selectedTeamId, player_name: playerName, player_number: playerNumber, batting_hand: battingHand, throwing_hand: throwingHand })
             });
             if (response.ok) {
                 setPlayerName('');
@@ -286,7 +300,8 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
         setEditingPlayer(player);
         setPlayerName(player.player_name);
         setPlayerNumber(player.player_number);
-        setHandedness(player.handedness);
+        setBattingHand(player.batting_hand || 'Right');
+        setThrowingHand(player.throwing_hand || 'Right');
         setGp(player.games_played);
         setPa(player.plate_appearances);
         setAb(player.at_bats);
@@ -325,7 +340,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    player_name: playerName, player_number: playerNumber, handedness: handedness,
+                    player_name: playerName, player_number: playerNumber, batting_hand: battingHand, throwing_hand: throwingHand,
                     games_played: gp, plate_appearances: pa, at_bats: ab,
                     singles: singles, doubles: doubles, triples: triples, home_runs: hr,
                     walks: bb, strikeouts: k, hit_by_pitches: hbp,
@@ -493,7 +508,8 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                     existing_id: existing?.id,
                     player_name: existing?.player_name || playerName || `Player #${playerNum}`,
                     player_number: existing?.player_number || playerNum,
-                    handedness: existing?.handedness || "Righty",
+                    batting_hand: existing ? normalizeHand(existing.batting_hand, 'Right') : 'Right',
+                    throwing_hand: existing ? normalizeHand(existing.throwing_hand, 'Right') : 'Right',
 
                     // Batting stats mapping
                     games_played: getBattingVal(["GP", "G", "GAMES", "GAMESPLAYED"]),
@@ -609,6 +625,14 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                 <div className="input-group" style={{ flex: 1 }}><label>Season</label><input type="text" value={season} onChange={(e) => setSeason(e.target.value)} required /></div>
                                 <div className="input-group" style={{ flex: 1 }}><label>Age Group</label><select value={ageGroup} onChange={(e) => setAgeGroup(e.target.value)} style={{ padding: '12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)' }}><option value="8U Division">8U Division</option><option value="10U Division">10U Division</option><option value="12U Division">12U Division</option><option value="14U Division">14U Division</option></select></div>
                             </div>
+                            <div className="input-group">
+                                <label>Innings Per Game (Game Length)</label>
+                                <select value={inningsPerGame} onChange={(e) => setInningsPerGame(parseInt(e.target.value) || 7)} style={{ padding: '12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)' }}>
+                                    <option value="5">5 Innings</option>
+                                    <option value="6">6 Innings</option>
+                                    <option value="7">7 Innings</option>
+                                </select>
+                            </div>
                             <div className="form-actions" style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
                                 <button type="submit" className="btn-primary" style={{ flex: 1 }}>Create Team</button>
                                 <button type="button" onClick={cancelForms} className="btn-secondary" style={{ flex: 1 }}>Cancel</button>
@@ -626,6 +650,14 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                 <div className="input-group" style={{ flex: 1 }}><label style={{ color: '#22c55e' }}>Wins</label><input type="number" min="0" value={wins} onChange={(e) => setWins(parseInt(e.target.value) || 0)} required /></div>
                                 <div className="input-group" style={{ flex: 1 }}><label style={{ color: '#ef4444' }}>Losses</label><input type="number" min="0" value={losses} onChange={(e) => setLosses(parseInt(e.target.value) || 0)} required /></div>
                                 <div className="input-group" style={{ flex: 1 }}><label style={{ color: '#94a3b8' }}>Ties</label><input type="number" min="0" value={ties} onChange={(e) => setTies(parseInt(e.target.value) || 0)} required /></div>
+                            </div>
+                            <div className="input-group">
+                                <label>Innings Per Game (Game Length)</label>
+                                <select value={inningsPerGame} onChange={(e) => setInningsPerGame(parseInt(e.target.value) || 7)} style={{ padding: '12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)' }}>
+                                    <option value="5">5 Innings</option>
+                                    <option value="6">6 Innings</option>
+                                    <option value="7">7 Innings</option>
+                                </select>
                             </div>
                             <div className="active-checkbox-group" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><input type="checkbox" id="active-checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer' }} /><label htmlFor="active-checkbox" style={{ fontSize: '14px', cursor: 'pointer', fontWeight: 'bold' }}>Active Team this Season</label></div>
                             <div className="form-actions" style={{ display: 'flex', gap: '12px', marginTop: '12px' }}><button type="submit" className="btn-primary" style={{ flex: 1 }}>Save Changes</button><button type="button" onClick={cancelForms} className="btn-secondary" style={{ flex: 1 }}>Cancel</button></div>
@@ -676,11 +708,18 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                     <input type="number" min="0" max="99" value={playerNumber} onChange={(e) => setPlayerNumber(parseInt(e.target.value) || 0)} required />
                                 </div>
                                 <div className="input-group" style={{ flex: 1 }}>
-                                    <label>Handedness (Bats)</label>
-                                    <select value={handedness} onChange={(e) => setHandedness(e.target.value)} style={{ padding: '12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)' }}>
-                                        <option value="Righty">Righty</option>
-                                        <option value="Lefty">Lefty</option>
+                                    <label>Bats</label>
+                                    <select value={battingHand} onChange={(e) => setBattingHand(e.target.value)} style={{ padding: '12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)' }}>
+                                        <option value="Right">Right</option>
+                                        <option value="Left">Left</option>
                                         <option value="Switch">Switch</option>
+                                    </select>
+                                </div>
+                                <div className="input-group" style={{ flex: 1 }}>
+                                    <label>Throws</label>
+                                    <select value={throwingHand} onChange={(e) => setThrowingHand(e.target.value)} style={{ padding: '12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)' }}>
+                                        <option value="Right">Right</option>
+                                        <option value="Left">Left</option>
                                     </select>
                                 </div>
                             </div>
@@ -695,7 +734,8 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                             <div className="form-row-double" style={{ display: 'flex', gap: '12px' }}>
                                 <div className="input-group" style={{ flex: 2 }}><label>Player Name</label><input type="text" value={playerName} onChange={(e) => setPlayerName(e.target.value)} required /></div>
                                 <div className="input-group" style={{ flex: 1 }}><label>Number</label><input type="number" value={playerNumber} onChange={(e) => setPlayerNumber(parseInt(e.target.value) || 0)} required /></div>
-                                <div className="input-group" style={{ flex: 1 }}><label>Bats</label><select value={handedness} onChange={(e) => setHandedness(e.target.value)} style={{ padding: '12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)' }}><option value="Righty">Righty</option><option value="Lefty">Lefty</option><option value="Switch">Switch</option></select></div>
+                                <div className="input-group" style={{ flex: 1 }}><label>Bats</label><select value={battingHand} onChange={(e) => setBattingHand(e.target.value)} style={{ padding: '12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)' }}><option value="Right">Right</option><option value="Left">Left</option><option value="Switch">Switch</option></select></div>
+                                <div className="input-group" style={{ flex: 1 }}><label>Throws</label><select value={throwingHand} onChange={(e) => setThrowingHand(e.target.value)} style={{ padding: '12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)' }}><option value="Right">Right</option><option value="Left">Left</option></select></div>
                             </div>
                             
                             {/* Batting Statistics section */}
@@ -825,6 +865,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                 players={players} 
                                 selectedPitcherId={selectedPitcherId} 
                                 onSelectPitcher={setSelectedPitcherId} 
+                                inningsPerGame={teams.find(t => t.id === selectedTeamId)?.innings_per_game || 7}
                             />
                         ) : (
                             <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: '8px' }}>
@@ -837,8 +878,11 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                                 <th onClick={() => handleSort('player_name')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
                                                     Player Name {sortField === 'player_name' && (sortDirection === 'asc' ? '↑' : '↓')}
                                                 </th>
-                                                <th onClick={() => handleSort('handedness')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
-                                                    Bats {sortField === 'handedness' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                <th onClick={() => handleSort('batting_hand')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                    Bats {sortField === 'batting_hand' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                </th>
+                                                <th onClick={() => handleSort('throwing_hand')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                    Throws {sortField === 'throwing_hand' && (sortDirection === 'asc' ? '↑' : '↓')}
                                                 </th>
                                                 {subView === 'batting' ? (
                                                     <>
@@ -930,7 +974,8 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                                 <tr key={p.id} style={{ borderBottom: '1px solid var(--border)' }}>
                                                     <td style={{ padding: '10px 12px', fontWeight: 'bold' }}>{p.player_number}</td>
                                                     <td style={{ padding: '10px 12px', color: 'var(--text-h)', fontWeight: '500' }}>{p.player_name}</td>
-                                                    <td style={{ padding: '10px 12px' }}>{p.handedness[0]}</td>
+                                                    <td style={{ padding: '10px 12px' }}>{normalizeHand(p.batting_hand, 'Right')[0]}</td>
+                                                    <td style={{ padding: '10px 12px' }}>{normalizeHand(p.throwing_hand, 'Right')[0]}</td>
                                                     {subView === 'batting' ? (
                                                         <>
                                                             <td style={{ padding: '10px 12px' }}>{p.games_played}</td>
@@ -1076,11 +1121,13 @@ interface PitchingStats {
 export function PitchingAnalyticsView({ 
     players, 
     selectedPitcherId, 
-    onSelectPitcher 
+    onSelectPitcher,
+    inningsPerGame = 7
 }: { 
     players: any[]; 
     selectedPitcherId: number | null; 
     onSelectPitcher: (id: number) => void;
+    inningsPerGame?: number;
 }) {
     // Filter out only players who have logged pitching stats and thrown at least 1 pitch
     const pitchers: PitchingStats[] = players.filter(p => p.games_pitched > 0 && p.number_of_pitches > 0);
@@ -1170,8 +1217,8 @@ export function PitchingAnalyticsView({
         // Normalization formulas (0 to 100)
         const runPrevention = Math.max(0, 100 - (pitcher.era * 10)); // ERA 0 = 100, ERA 10+ = 0
         const runnerControl = Math.max(0, 100 - ((pitcher.whip - 0.5) * 40)); // WHIP 0.5 = 100, WHIP 3.0+ = 0
-        const missedBats = Math.min(100, pitcher.k7 * 7.14); // K/7 14+ = 100
-        const command = Math.max(0, 100 - (pitcher.bb7 * 16.67)); // BB/7 0 = 100, BB/7 6+ = 0
+        const missedBats = Math.min(100, pitcher.k7 * (50 / inningsPerGame)); // K/Game benchmark scaled (2 SO per inning = 100%)
+        const command = Math.max(0, 100 - (pitcher.bb7 * (116.67 / inningsPerGame))); // BB/Game benchmark scaled (6 BB per 7 innings = 0% command)
         const efficiency = Math.max(0, 100 - ((pitcher.pitches_per_inning - 10) * 8.33)); // Pitches/Inning 10 = 100, 22+ = 0
 
         const scores = [runPrevention, runnerControl, missedBats, command, efficiency];
@@ -1185,7 +1232,13 @@ export function PitchingAnalyticsView({
         }).join(" ");
     };
 
-    const axisLabels = ["Run Prev (ERA)", "Runner Ctrl (WHIP)", "Missed Bats (K/7)", "Command (BB/7)", "Efficiency"];
+    const axisLabels = [
+        "Run Prev (ERA)",
+        "Runner Ctrl (WHIP)",
+        `Missed Bats (K/${inningsPerGame})`,
+        `Command (BB/${inningsPerGame})`,
+        "Efficiency"
+    ];
 
     return (
         <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '24px', padding: '16px 8px', background: 'var(--card-bg)', borderRadius: '12px' }}>
@@ -1466,11 +1519,11 @@ export function PitchingAnalyticsView({
                 {/* KPI details grid footer */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginTop: '16px', borderTop: '1px solid var(--border)', paddingTop: '12px' }}>
                     <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '10px', opacity: 0.7 }}>K/7</div>
+                        <div style={{ fontSize: '10px', opacity: 0.7 }}>K/{inningsPerGame}</div>
                         <div style={{ fontSize: '14px', fontWeight: 'bold' }}>{activePitcher.k7.toFixed(2)}</div>
                     </div>
                     <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '10px', opacity: 0.7 }}>BB/7</div>
+                        <div style={{ fontSize: '10px', opacity: 0.7 }}>BB/{inningsPerGame}</div>
                         <div style={{ fontSize: '14px', fontWeight: 'bold' }}>{activePitcher.bb7.toFixed(2)}</div>
                     </div>
                     <div style={{ textAlign: 'center' }}>
