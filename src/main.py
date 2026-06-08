@@ -43,7 +43,6 @@ class GoogleRegisterRequest(BaseModel):
     location: str
     age_group: str
 
-
 class ChatRequest(BaseModel):
     question: str
     age_group: str
@@ -57,6 +56,7 @@ class TeamRequest(BaseModel):
     team_name: str
     season: str
     age_group: str
+    innings_per_game: int = 7
 
 class SetActiveRequest(BaseModel):
     coach_id: int
@@ -70,18 +70,21 @@ class TeamUpdateRequest(BaseModel):
     ties: int
     age_group: str
     is_active: bool
+    innings_per_game: int = 7
 
 class PlayerRequest(BaseModel):
     team_id: int
     player_name: str
     player_number: int
-    handedness: str
+    batting_hand: str
+    throwing_hand: str
     parent_player_id: int | None = None
 
 class PlayerUpdateRequest(BaseModel):
     player_name: str
     player_number: int
-    handedness: str
+    batting_hand: str
+    throwing_hand: str
     games_played: int
     parent_player_id: int | None = None
     plate_appearances: int
@@ -244,7 +247,7 @@ def api_chat(data: ChatRequest):
 @app.post("/api/teams")
 def api_create_team(data: TeamRequest):
     try:
-        new_team = create_team(data.coach_id, data.team_name, data.season, data.age_group)
+        new_team = create_team(data.coach_id, data.team_name, data.season, data.age_group, data.innings_per_game)
         return new_team
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -272,7 +275,7 @@ def api_update_team(team_id: int, data: TeamUpdateRequest):
     try:
         updated = update_team(
             data.coach_id, team_id, data.team_name, data.season,
-            data.wins, data.losses, data.ties, data.age_group, data.is_active
+            data.wins, data.losses, data.ties, data.age_group, data.is_active, data.innings_per_game
         )
         if not updated:
             raise HTTPException(status_code=404, detail="Team not found or unauthorized.")
@@ -284,7 +287,7 @@ def api_update_team(team_id: int, data: TeamUpdateRequest):
 @app.post("/api/players")
 def api_add_player(data: PlayerRequest):
     try:
-        new_player = add_player(data.team_id, data.player_name, data.player_number, data.handedness)
+        new_player = add_player(data.team_id, data.player_name, data.player_number, data.batting_hand, data.throwing_hand, data.parent_player_id)
         if not new_player:
             raise HTTPException(status_code=500, detail="Failed to create player.")
         return new_player
