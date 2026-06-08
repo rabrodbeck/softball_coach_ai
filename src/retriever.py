@@ -160,7 +160,7 @@ def build_agent_executor(coach_id: int, selected_team_id: int | None = None):
                 
                 # Format pitching stats (only if they have pitching appearances)
                 pitching = ""
-                if p.get("games_pitched", 0) > 0:
+                if p.get("games_pitched", 0) > 0 and p.get("number_of_pitches", 0) > 0:
                     pitching = (
                         f" | Pitching: GamesPitched={p.get('games_pitched', 0)}, GamesStarted={p.get('games_started', 0)}, "
                         f"InningsPitched={p.get('innings_pitched', 0.0):.1f}, BattersFaced={p.get('batters_faced', 0)}, "
