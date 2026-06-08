@@ -137,11 +137,10 @@ def build_agent_executor(coach_id: int, selected_team_id: int | None = None):
 
     @tool
     def get_team_roster(team_id: int) -> str:
-        """Retrieves the complete roster of players and their full stats (both Batting and Pitching) for a specific team.
+        """Retrieves the complete roster of players and their full stats (Batting, Pitching, Fielding, and Catching) for a specific team.
         You must specify the team_id.
         """
         try:
-            # SECURITY VERIFICATION: Ensure the requested team belongs to the active coach
             my_teams = get_coach_teams(coach_id)
             matching_team = next((t for t in my_teams if t["id"] == team_id), None)
             if not matching_team:
@@ -178,7 +177,23 @@ def build_agent_executor(coach_id: int, selected_team_id: int | None = None):
                         f"K7={p.get('k7', 0.0):.2f}, BB7={p.get('bb7', 0.0):.2f}, "
                         f"PitchesPerInning={p.get('pitches_per_inning', 0.0):.1f}, KtoBBRatio={p.get('k_bb_ratio', 0.0):.2f}"
                     )
-                output.append(f"- **{p['player_name']}** (Jersey #{p['player_number']}, Bats: {p.get('batting_hand', 'Right')}, Throws: {p.get('throwing_hand', 'Right')}) - {batting}{pitching}")
+                
+                # Format fielding stats
+                fielding = (
+                    f" | Fielding: TC={p.get('total_chances', 0)}, PO={p.get('putouts', 0)}, "
+                    f"A={p.get('assists', 0)}, E={p.get('errors', 0)}, FPCT={p.get('fielding_percentage', 0.0):.3f}"
+                )
+                
+                # Format catching stats (only if they have caught innings)
+                catching = ""
+                if p.get("innings_caught", 0.0) > 0:
+                    catching = (
+                        f" | Catching: InningsCaught={p.get('innings_caught', 0.0):.1f}, PB={p.get('passed_balls_allowed', 0)}, "
+                        f"SBA={p.get('runners_stolen_bases', 0)}, CS={p.get('runners_caught_stealing', 0)}, "
+                        f"CS_PCT={p.get('caught_stealing_percentage', 0.0):.3f}"
+                    )
+                
+                output.append(f"- **{p['player_name']}** (Jersey #{p['player_number']}, Bats: {p.get('batting_hand', 'Right')}, Throws: {p.get('throwing_hand', 'Right')}) - {batting}{pitching}{fielding}{catching}")
             return "\n".join(output)
         except Exception as e:
             return f"Error fetching team roster: {str(e)}"
