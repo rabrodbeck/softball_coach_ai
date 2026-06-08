@@ -40,25 +40,35 @@ Guidelines:
 Context: {context}
 Question: {question}"""
 
+_vectorstore = None
+
+def get_vectorstore():
+    global _vectorstore
+    if _vectorstore is None:
+        load_dotenv()
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if not api_key:
+            raise ValueError("OPENAI_API_KEY is not set in environments.")
+        
+        embeddings = OpenAIEmbeddings(
+            model="text-embedding-3-small",
+            api_key=api_key
+        )
+        
+        connection_string = os.environ.get("DATABASE_URL", "").replace("postgresql://", "postgresql+psycopg2://")
+        
+        _vectorstore = PGVector(
+            connection_string=connection_string,
+            embedding_function=embeddings,
+            collection_name="softball_playbook"
+        )
+    return _vectorstore
+
 def build_chain():
     load_dotenv()
     api_key = os.environ.get("OPENAI_API_KEY")
     
-    embeddings = OpenAIEmbeddings(
-        model="text-embedding-3-small",
-        api_key=api_key
-    )
-    
-    if not os.path.exists(PERSIST_DIR):
-        os.makedirs(PERSIST_DIR, exist_ok=True)
-    
-    connection_string = os.environ.get("DATABASE_URL", "").replace("postgresql://", "postgresql+psycopg2://")
-    
-    vectorstore = PGVector(
-        connection_string = connection_string,
-        embedding_function=embeddings,
-        collection_name="softball_playbook"
-    )
+    vectorstore = get_vectorstore()
 
     retriever = vectorstore.as_retriever(
         search_type="similarity", 
@@ -96,15 +106,11 @@ def build_agent_executor(coach_id: int, selected_team_id: int | None = None):
     """Factory function that builds the OpenAI Tool Calling Agent with DB and Vector tools."""
     load_dotenv()
     api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise ValueError("OPENAI_API_KEY is not set in environments.")
 
-    # Connect vectorstore
-    embeddings = OpenAIEmbeddings(model="text-embedding-3-small", api_key=api_key)
-    connection_string = os.environ.get("DATABASE_URL", "").replace("postgresql://", "postgresql+psycopg2://")
-    vectorstore = PGVector(
-        connection_string=connection_string,
-        embedding_function=embeddings,
-        collection_name="softball_playbook"
-    )
+    # Reuse global vectorstore
+    vectorstore = get_vectorstore()
 
     # Tools defined here
     @tool
@@ -172,7 +178,7 @@ def build_agent_executor(coach_id: int, selected_team_id: int | None = None):
                         f"K7={p.get('k7', 0.0):.2f}, BB7={p.get('bb7', 0.0):.2f}, "
                         f"PitchesPerInning={p.get('pitches_per_inning', 0.0):.1f}, KtoBBRatio={p.get('k_bb_ratio', 0.0):.2f}"
                     )
-                output.append(f"- **{p['player_name']}** (Jersey #{p['player_number']}, Bats: {p['handedness']}) - {batting}{pitching}")
+                output.append(f"- **{p['player_name']}** (Jersey #{p['player_number']}, Bats: {p.get('batting_hand', 'Right')}, Throws: {p.get('throwing_hand', 'Right')}) - {batting}{pitching}")
             return "\n".join(output)
         except Exception as e:
             return f"Error fetching team roster: {str(e)}"

@@ -265,6 +265,26 @@ def calculate_derived_pitching_stats(stats: dict, innings_per_game: int = 7):
     result["k_bb_ratio"] = round(k_bb_ratio, 1)
     return result
 
+def calculate_derived_defensive_stats(stats: dict):
+    """Calculates fielding percentage and caught stealing percentages for catcher."""
+    tc = stats.get("total_chances", 0)
+    po = stats.get("putouts", 0)
+    ast = stats.get("assists", 0)
+
+    # Fielding Percentage = (PO + A) / TC
+    fielding_pct = (po + ast) / tc if tc > 0 else 0.0
+
+    # Catcher Caught Stealing Percentage = CS / (SB + CS)
+    sb = stats.get("runners_stolen_bases", 0)
+    cs = stats.get("runners_caught_stealing", 0)
+    attempts = sb + cs
+    cs_pct = cs / attempts if attempts > 0 else 0.0
+
+    result = dict(stats)
+    result["fielding_percentage"] = round(fielding_pct, 3)
+    result["caught_stealing_percentage"] = round(cs_pct, 3)
+    return result
+
 def calculate_derived_stats(player: dict):
     """Calculates htis, batting average, and on base percentage dynamically from raw stats."""
     # 1. Calculate hits
@@ -290,8 +310,9 @@ def calculate_derived_stats(player: dict):
     result["batting_average"] = round(avg, 3)
     result["on_base_percentage"] = round(obp, 3)
     
-    # 4. Chain calculations for pitching stats (ERA and WHIP)
-    return calculate_derived_pitching_stats(result, result.get("innings_per_game", 7))
+    # 4. Chain pitching and defensive derivations together
+    pitching_stats = calculate_derived_pitching_stats(result, result.get("innings_per_game", 7))
+    return calculate_derived_defensive_stats(pitching_stats)
 
 def add_player(team_id: int, name: str, number: int, batting_hand: str, throwing_hand: str, parent_player_id: int = None):
     """Creates a new player on a team with corresponding empty stats rows."""
@@ -313,12 +334,18 @@ def add_player(team_id: int, name: str, number: int, batting_hand: str, throwing
             
         player_id = player_row["id"]
         
-        # 2. Insert stats rows
+        # 2. Insert stats rows for all categories
         cursor.execute("INSERT INTO offensive_stats (player_id, team_id) VALUES (%s, %s) RETURNING *;", (player_id, team_id))
         off_row = cursor.fetchone()
         
         cursor.execute("INSERT INTO pitching_stats (player_id, team_id) VALUES (%s, %s) RETURNING *;", (player_id, team_id))
         pit_row = cursor.fetchone()
+
+        cursor.execute("INSERT INTO defensive_stats (player_id, team_id) VALUES (%s, %s) RETURNING *;", (player_id, team_id))
+        def_row = cursor.fetchone()
+
+        cursor.execute("INSERT INTO catching_stats (player_id, team_id) VALUES (%s, %s) RETURNING *;", (player_id, team_id))
+        cat_row = cursor.fetchone()
         
         conn.commit()
 
@@ -330,6 +357,8 @@ def add_player(team_id: int, name: str, number: int, batting_hand: str, throwing
         full_player = {
             **dict(off_row),
             **dict(pit_row),
+            **dict(def_row),
+            **dict(cat_row),
             **dict(player_row),
             "innings_per_game": innings_per_game
         }
@@ -372,11 +401,21 @@ def get_team_players(team_id: int):
                 COALESCE(p_stats.walks, 0) as walks_allowed,
                 COALESCE(p_stats.strikeouts, 0) as strikeouts_thrown,
                 COALESCE(p_stats.hit_by_pitches, 0) as hit_by_pitches_allowed,
-                COALESCE(p_stats.left_on_base, 0) as left_on_base
+                COALESCE(p_stats.left_on_base, 0) as left_on_base,
+                COALESCE(d.total_chances, 0) as total_chances,
+                COALESCE(d.assists, 0) as assists,
+                COALESCE(d.putouts, 0) as putouts,
+                COALESCE(d.errors, 0) as errors,
+                COALESCE(c.innings_caught, 0.0) as innings_caught,
+                COALESCE(c.passed_balls_allowed, 0) as passed_balls_allowed,
+                COALESCE(c.runners_stolen_bases, 0) as runners_stolen_bases,
+                COALESCE(c.runners_caught_stealing, 0) as runners_caught_stealing
             FROM players p
             LEFT JOIN teams t ON p.team_id = t.id
             LEFT JOIN offensive_stats o ON p.id = o.player_id
             LEFT JOIN pitching_stats p_stats ON p.id = p_stats.player_id
+            LEFT JOIN defensive_stats d ON p.id = d.player_id
+            LEFT JOIN catching_stats c ON p.id = c.player_id
             WHERE p.team_id = %s
             ORDER BY p.player_name ASC;
             """,
@@ -469,6 +508,46 @@ def update_player_stats(player_id: int, stats: dict):
             )
         )
         pit_row = cursor.fetchone()
+
+        # Update defensive_stats
+        cursor.execute(
+            """
+            INSERT INTO defensive_stats (
+                player_id, team_id, total_chances, assists, putouts, errors, updated_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            ON CONFLICT (player_id) DO UPDATE
+            SET total_chances = EXCLUDED.total_chances, assists = EXCLUDED.assists,
+                putouts = EXCLUDED.putouts, errors = EXCLUDED.errors, updated_at = CURRENT_TIMESTAMP
+            RETURNING *;
+            """,
+            (
+                player_id, player_row["team_id"], stats.get("total_chances", 0), stats.get("assists", 0),
+                stats.get("putouts", 0), stats.get("errors", 0)
+            )
+        )
+        def_row = cursor.fetchone()
+
+        # Update catching_stats
+        cursor.execute(
+            """
+            INSERT INTO catching_stats (
+                player_id, team_id, innings_caught, passed_balls_allowed, runners_stolen_bases, runners_caught_stealing, updated_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            ON CONFLICT (player_id) DO UPDATE
+            SET innings_caught = EXCLUDED.innings_caught, passed_balls_allowed = EXCLUDED.passed_balls_allowed,
+                runners_stolen_bases = EXCLUDED.runners_stolen_bases, runners_caught_stealing = EXCLUDED.runners_caught_stealing,
+                updated_at = CURRENT_TIMESTAMP
+            RETURNING *;
+            """,
+            (
+                player_id, player_row["team_id"], stats.get("innings_caught", 0.0), stats.get("passed_balls_allowed", 0),
+                stats.get("runners_stolen_bases", 0), stats.get("runners_caught_stealing", 0)
+            )
+        )
+        cat_row = cursor.fetchone()
+
         conn.commit()
 
         # Fetch team innings_per_game
@@ -478,6 +557,7 @@ def update_player_stats(player_id: int, stats: dict):
 
         full_player = {
             **dict(stats_row),
+            **dict(player_row),
             "games_pitched": pit_row["games_pitched"],
             "games_started": pit_row["games_started"],
             "innings_pitched": float(pit_row["innings_pitched"]),
@@ -490,8 +570,15 @@ def update_player_stats(player_id: int, stats: dict):
             "strikeouts_thrown": pit_row["strikeouts"],
             "hit_by_pitches_allowed": pit_row["hit_by_pitches"],
             "left_on_base": pit_row["left_on_base"],
-            "innings_per_game": innings_per_game,
-            **dict(player_row)
+            "total_chances": def_row["total_chances"],
+            "assists": def_row["assists"],
+            "putouts": def_row["putouts"],
+            "errors": def_row["errors"],
+            "innings_caught": float(cat_row["innings_caught"]),
+            "passed_balls_allowed": cat_row["passed_balls_allowed"],
+            "runners_stolen_bases": cat_row["runners_stolen_bases"],
+            "runners_caught_stealing": cat_row["runners_caught_stealing"],
+            "innings_per_game": innings_per_game
         }
         return calculate_derived_stats(full_player)
     except Exception as e:
@@ -633,22 +720,51 @@ def bulk_update_player_stats(team_id: int, updates: list):
                 pit_row = cursor.fetchone()
                 if not pit_row:
                     pit_row = {
-                        "games_pitched": 0,
-                        "games_started": 0,
-                        "innings_pitched": 0.0,
-                        "batters_faced": 0,
-                        "number_of_pitches": 0,
-                        "hits": 0,
-                        "runs": 0,
-                        "earned_runs": 0,
-                        "walks": 0,
-                        "strikeouts": 0,
-                        "hit_by_pitches": 0,
-                        "left_on_base": 0
+                        "games_pitched": 0, "games_started": 0, "innings_pitched": 0.0, "batters_faced": 0,
+                        "number_of_pitches": 0, "hits": 0, "runs": 0, "earned_runs": 0, "walks": 0,
+                        "strikeouts": 0, "hit_by_pitches": 0, "left_on_base": 0
                     }
 
-            if player_row and stats_row and pit_row:
-                # Merge dicts (prefixing pitching stats to avoid naming collisions, player_row last)
+            # Update defensive_stats
+            cursor.execute(
+                """
+                INSERT INTO defensive_stats (
+                    player_id, team_id, total_chances, assists, putouts, errors, updated_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (player_id) DO UPDATE
+                SET total_chances = EXCLUDED.total_chances, assists = EXCLUDED.assists,
+                    putouts = EXCLUDED.putouts, errors = EXCLUDED.errors, updated_at = CURRENT_TIMESTAMP
+                RETURNING *;
+                """,
+                (
+                    player_id, team_id, p.get("total_chances", 0), p.get("assists", 0),
+                    p.get("putouts", 0), p.get("errors", 0)
+                )
+            )
+            def_row = cursor.fetchone()
+
+            # Update catching_stats
+            cursor.execute(
+                """
+                INSERT INTO catching_stats (
+                    player_id, team_id, innings_caught, passed_balls_allowed, runners_stolen_bases, runners_caught_stealing, updated_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (player_id) DO UPDATE
+                SET innings_caught = EXCLUDED.innings_caught, passed_balls_allowed = EXCLUDED.passed_balls_allowed,
+                    runners_stolen_bases = EXCLUDED.runners_stolen_bases, runners_caught_stealing = EXCLUDED.runners_caught_stealing,
+                    updated_at = CURRENT_TIMESTAMP
+                RETURNING *;
+                """,
+                (
+                    player_id, team_id, p.get("innings_caught", 0.0), p.get("passed_balls_allowed", 0),
+                    p.get("runners_stolen_bases", 0), p.get("runners_caught_stealing", 0)
+                )
+            )
+            cat_row = cursor.fetchone()
+
+            if player_row and stats_row and pit_row and def_row and cat_row:
                 full_player = {
                     **dict(stats_row),
                     "games_pitched": pit_row["games_pitched"],
@@ -663,6 +779,14 @@ def bulk_update_player_stats(team_id: int, updates: list):
                     "strikeouts_thrown": pit_row["strikeouts"],
                     "hit_by_pitches_allowed": pit_row["hit_by_pitches"],
                     "left_on_base": pit_row["left_on_base"],
+                    "total_chances": def_row["total_chances"],
+                    "assists": def_row["assists"],
+                    "putouts": def_row["putouts"],
+                    "errors": def_row["errors"],
+                    "innings_caught": float(cat_row["innings_caught"]),
+                    "passed_balls_allowed": cat_row["passed_balls_allowed"],
+                    "runners_stolen_bases": cat_row["runners_stolen_bases"],
+                    "runners_caught_stealing": cat_row["runners_caught_stealing"],
                     "innings_per_game": innings_per_game,
                     **dict(player_row)
                 }
