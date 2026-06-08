@@ -100,7 +100,6 @@ class PlayerUpdateRequest(BaseModel):
     caught_stealing: int
     runs_scored: int
     runs_batted_in: int
-
     # Pitching stats
     games_pitched: int = 0
     games_started: int = 0
@@ -114,6 +113,16 @@ class PlayerUpdateRequest(BaseModel):
     strikeouts_thrown: int = 0
     hit_by_pitches_allowed: int = 0
     left_on_base: int = 0
+    # Fielding stats (NEW)
+    total_chances: int = 0
+    assists: int = 0
+    putouts: int = 0
+    errors: int = 0
+    # Catching stats (NEW)
+    innings_caught: float = 0.0
+    passed_balls_allowed: int = 0
+    runners_stolen_bases: int = 0
+    runners_caught_stealing: int = 0
 
 class BulkImportPlayer(BaseModel):
     player_name: str
@@ -146,6 +155,16 @@ class BulkImportPlayer(BaseModel):
     strikeouts_thrown: int
     hit_by_pitches_allowed: int
     left_on_base: int
+    # Fielding stats (NEW)
+    total_chances: int = 0
+    assists: int = 0
+    putouts: int = 0
+    errors: int = 0
+    # Catching stats (NEW)
+    innings_caught: float = 0.0
+    passed_balls_allowed: int = 0
+    runners_stolen_bases: int = 0
+    runners_caught_stealing: int = 0
 
 class BulkImportRequest(BaseModel):
     team_id: int
