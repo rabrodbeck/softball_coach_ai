@@ -56,6 +56,20 @@ interface Player {
     left_on_base: number;
     era: number; // Derived
     whip: number; // Derived
+
+    // Fielding stats (NEW)
+    total_chances: number;
+    assists: number;
+    putouts: number;
+    errors: number;
+    fielding_percentage: number; // Derived
+
+    // Catching stats (NEW)
+    innings_caught: number;
+    passed_balls_allowed: number;
+    runners_stolen_bases: number;
+    runners_caught_stealing: number;
+    caught_stealing_percentage: number; // Derived
 }
 
 const normalizeHand = (h: string | null | undefined, fallback = 'Right'): string => {
@@ -85,7 +99,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
     const [editingTeam, setEditingTeam] = useState<Team | null>(null);
     const [showAddPlayerForm, setShowAddPlayerForm] = useState(false);
     const [editingPlayer, setEditingPlayer] = useState<Player | null>(null);
-    const [subView, setSubView] = useState<'batting' | 'pitching' | 'analytics'>('batting');
+    const [subView, setSubView] = useState<'batting' | 'pitching' | 'fielding' | 'catching' | 'analytics'>('batting');
     const [selectedPitcherId, setSelectedPitcherId] = useState<number | null>(null);
 
     // Team form inputs
@@ -130,28 +144,42 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
     const [hitByPitchesAllowed, setHitByPitchesAllowed] = useState(0);
     const [leftOnBase, setLeftOnBase] = useState(0);
 
+    // Fielding form inputs
+    const [totalChances, setTotalChances] = useState(0);
+    const [assists, setAssists] = useState(0);
+    const [putouts, setPutouts] = useState(0);
+    const [errorsVal, setErrorsVal] = useState(0);
+
+    // Catching form inputs
+    const [inningsCaught, setInningsCaught] = useState(0.0);
+    const [passedBallsAllowed, setPassedBallsAllowed] = useState(0);
+    const [runnersStolenBases, setRunnersStolenBases] = useState(0);
+    const [runnersCaughtStealing, setRunnersCaughtStealing] = useState(0);
+
     // Import state variables
-    const [importPreview, setImportPreview] = useState<any[]>([])
-    const [showImportModal, setShowImportModal] = useState(false)
+    const [importPreview, setImportPreview] = useState<any[]>([]);
+    const [showImportModal, setShowImportModal] = useState(false);
 
     // Sorting State
     const [sortField, setSortField] = useState<keyof Player | null>(null);
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
     const handleSort = (field: keyof Player) => {
         if (sortField === field) {
-            // Toggle direction if clicking the same field
             setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
         } else {
-            // Default to descending order on first click of a new column
             setSortField(field);
             setSortDirection('desc');
         }
     };
+    
     // Derived sorted roster list
     const sortedPlayers = React.useMemo(() => {
         let list = [...players];
         if (subView === 'pitching') {
             list = list.filter(p => p.games_pitched > 0 && p.number_of_pitches > 0);
+        }
+        if (subView === 'catching') {
+            list = list.filter(p => p.innings_caught > 0);
         }
         if (!sortField) return list;
         return list.sort((a, b) => {
@@ -170,6 +198,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
             return sortDirection === 'asc' ? aNum - bNum : bNum - aNum;
         });
     }, [players, sortField, sortDirection, subView]);
+
     const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
     const fetchTeams = async () => {
@@ -330,6 +359,18 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
         setStrikeoutsThrown(player.strikeouts_thrown || 0);
         setHitByPitchesAllowed(player.hit_by_pitches_allowed || 0);
         setLeftOnBase(player.left_on_base || 0);
+
+        // Load fielding stats
+        setTotalChances(player.total_chances || 0);
+        setAssists(player.assists || 0);
+        setPutouts(player.putouts || 0);
+        setErrorsVal(player.errors || 0);
+
+        // Load catching stats
+        setInningsCaught(player.innings_caught || 0.0);
+        setPassedBallsAllowed(player.passed_balls_allowed || 0);
+        setRunnersStolenBases(player.runners_stolen_bases || 0);
+        setRunnersCaughtStealing(player.runners_caught_stealing || 0);
     };
 
     const handleUpdatePlayer = async (e: React.FormEvent) => {
@@ -357,7 +398,15 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                     walks_allowed: walksAllowed,
                     strikeouts_thrown: strikeoutsThrown,
                     hit_by_pitches_allowed: hitByPitchesAllowed,
-                    left_on_base: leftOnBase
+                    left_on_base: leftOnBase,
+                    total_chances: totalChances,
+                    assists: assists,
+                    putouts: putouts,
+                    errors: errorsVal,
+                    innings_caught: inningsCaught,
+                    passed_balls_allowed: passedBallsAllowed,
+                    runners_stolen_bases: runnersStolenBases,
+                    runners_caught_stealing: runnersCaughtStealing
                 })
             });
             if (response.ok) {
@@ -389,6 +438,45 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
         setEditingPlayer(null);
         setTeamName('');
         setPlayerName('');
+        setPlayerNumber(0);
+        setBattingHand('Right');
+        setThrowingHand('Right');
+        setGp(0);
+        setPa(0);
+        setAb(0);
+        setSingles(0);
+        setDoubles(0);
+        setTriples(0);
+        setHr(0);
+        setBb(0);
+        setK(0);
+        setHbp(0);
+        setSb(0);
+        setCs(0);
+        setRunsScored(0);
+        setRbi(0);
+        setGamesPitched(0);
+        setGamesStarted(0);
+        setInningsPitched(0.0);
+        setBattersFaced(0);
+        setNumberOfPitches(0);
+        setHitsAllowed(0);
+        setRunsAllowed(0);
+        setEarnedRuns(0);
+        setWalksAllowed(0);
+        setStrikeoutsThrown(0);
+        setHitByPitchesAllowed(0);
+        setLeftOnBase(0);
+
+        setTotalChances(0);
+        setAssists(0);
+        setPutouts(0);
+        setErrorsVal(0);
+
+        setInningsCaught(0.0);
+        setPassedBallsAllowed(0);
+        setRunnersStolenBases(0);
+        setRunnersCaughtStealing(0);
     };
 
     const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -489,6 +577,25 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                     return parseFloat(pitchingValues[idx].replace(/"/g, '')) || defaultVal;
                 };
 
+                // Unified lookup helper checking both batting and pitching columns for new stats
+                const getVal = (colNames: string[], defaultVal = 0) => {
+                    let idx = battingHeaders.findIndex(h => colNames.includes(h));
+                    if (idx !== -1 && battingValues[idx]) return parseInt(battingValues[idx].replace(/"/g, '')) || defaultVal;
+                    
+                    idx = pitchingHeaders.findIndex(h => colNames.includes(h));
+                    if (idx !== -1 && pitchingValues[idx]) return parseInt(pitchingValues[idx].replace(/"/g, '')) || defaultVal;
+                    return defaultVal;
+                };
+
+                const getValFloat = (colNames: string[], defaultVal = 0.0) => {
+                    let idx = battingHeaders.findIndex(h => colNames.includes(h));
+                    if (idx !== -1 && battingValues[idx]) return parseFloat(battingValues[idx].replace(/"/g, '')) || defaultVal;
+                    
+                    idx = pitchingHeaders.findIndex(h => colNames.includes(h));
+                    if (idx !== -1 && pitchingValues[idx]) return parseFloat(pitchingValues[idx].replace(/"/g, '')) || defaultVal;
+                    return defaultVal;
+                };
+
                 // Search terms are normalized (no whitespace, uppercase)
                 const playerNum = getBattingVal(["#", "JERSEY", "JERSEY#", "JERSEYNUMBER", "NUMBER", "NO", "NO.", "PLAYERNUMBER", "NUM", "JERSEYNO", "JERSEYNO.", "PLAYERNO", "PLAYERNO.", "NUMBER#"]);
                 
@@ -539,7 +646,19 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                     walks_allowed: getPitchingVal(["BB", "WALKS", "BASEONBALLS", "WALKSALLOWED"]),
                     strikeouts_thrown: getPitchingVal(["SO", "STRIKEOUTS", "K", "STRIKEOUTSTHROWN"]),
                     hit_by_pitches_allowed: getPitchingVal(["HBP", "HITBYPITCH", "HITBYPITCHES"]),
-                    left_on_base: getPitchingVal(["LOB", "LEFTONBASE"])
+                    left_on_base: getPitchingVal(["LOB", "LEFTONBASE"]),
+
+                    // Fielding stats mapping (from CSV)
+                    total_chances: getVal(["TC", "TOTALCHANCES", "CHANCES"]),
+                    assists: getVal(["A", "ASSISTS", "ASSIST"]),
+                    putouts: getVal(["PO", "PUTOUTS", "PUTOUT"]),
+                    errors: getVal(["E", "ERRORS", "ERROR"]),
+
+                    // Catching stats mapping (from CSV)
+                    innings_caught: getValFloat(["IC", "INNINGSCAUGHT"]),
+                    passed_balls_allowed: getVal(["PB", "PASSEDBALLS", "PASSEDBALL"]),
+                    runners_stolen_bases: getVal(["SBA", "RUNNERSSTOLENBASES", "SBAAGAINST"]),
+                    runners_caught_stealing: getVal(["CS", "RUNNERSCAUGHTSTEALING", "CSAGAINST"])
                 });
             }
             
@@ -580,7 +699,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
         } catch (err) {
             console.error("Error bulk updating stats:", err);
         }
-    }
+    };
 
     return (
         <div className="modal-overlay">
@@ -773,6 +892,24 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                 <div className="input-group"><label>HBP Allowed</label><input type="number" min="0" value={hitByPitchesAllowed} onChange={(e) => setHitByPitchesAllowed(parseInt(e.target.value) || 0)} /></div>
                                 <div className="input-group"><label>Left on Base (LOB)</label><input type="number" min="0" value={leftOnBase} onChange={(e) => setLeftOnBase(parseInt(e.target.value) || 0)} /></div>
                             </div>
+
+                            {/* Fielding Statistics Section */}
+                            <h4 style={{ margin: '16px 0 8px 0', fontSize: '13px', color: 'var(--accent)', fontWeight: 'bold', borderBottom: '1px dashed var(--border)', paddingBottom: '4px', textAlign: 'left' }}>Fielding Statistics</h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '16px' }}>
+                                <div className="input-group"><label>Total Chances (TC)</label><input type="number" min="0" value={totalChances} onChange={(e) => setTotalChances(parseInt(e.target.value) || 0)} /></div>
+                                <div className="input-group"><label>Putouts (PO)</label><input type="number" min="0" value={putouts} onChange={(e) => setPutouts(parseInt(e.target.value) || 0)} /></div>
+                                <div className="input-group"><label>Assists (A)</label><input type="number" min="0" value={assists} onChange={(e) => setAssists(parseInt(e.target.value) || 0)} /></div>
+                                <div className="input-group"><label>Errors (E)</label><input type="number" min="0" value={errorsVal} onChange={(e) => setErrorsVal(parseInt(e.target.value) || 0)} /></div>
+                            </div>
+
+                            {/* Catching Statistics Section */}
+                            <h4 style={{ margin: '16px 0 8px 0', fontSize: '13px', color: 'var(--accent)', fontWeight: 'bold', borderBottom: '1px dashed var(--border)', paddingBottom: '4px', textAlign: 'left' }}>Catching Statistics</h4>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '16px' }}>
+                                <div className="input-group"><label>Innings Caught (IC)</label><input type="number" step="0.1" min="0" value={inningsCaught} onChange={(e) => setInningsCaught(parseFloat(e.target.value) || 0.0)} /></div>
+                                <div className="input-group"><label>Passed Balls (PB)</label><input type="number" min="0" value={passedBallsAllowed} onChange={(e) => setPassedBallsAllowed(parseInt(e.target.value) || 0)} /></div>
+                                <div className="input-group"><label>SB Allowed (SBA)</label><input type="number" min="0" value={runnersStolenBases} onChange={(e) => setRunnersStolenBases(parseInt(e.target.value) || 0)} /></div>
+                                <div className="input-group"><label>Caught Stealing (CS)</label><input type="number" min="0" value={runnersCaughtStealing} onChange={(e) => setRunnersCaughtStealing(parseInt(e.target.value) || 0)} /></div>
+                            </div>
                             
                             <div className="form-actions" style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
                                 <button type="submit" className="btn-primary" style={{ flex: 1 }}>Save Stats</button>
@@ -802,45 +939,79 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                                 fontWeight: 'bold' 
                                             }}
                                         >
-                                        Batting
-                                    </button>
-                                    <button 
-                                        type="button"
-                                        onClick={() => { setSubView('pitching'); setSortField(null); }} 
-                                        className={`tab-btn ${subView === 'pitching' ? 'active' : ''}`}
-                                        style={{ 
-                                            padding: '4px 10px', 
-                                            background: subView === 'pitching' ? 'var(--accent-bg)' : 'transparent', 
-                                            border: '1px solid ' + (subView === 'pitching' ? 'var(--accent)' : 'var(--border)'),
-                                            color: subView === 'pitching' ? 'var(--accent)' : 'var(--text)', 
-                                            cursor: 'pointer', 
-                                            borderRadius: '6px', 
-                                            fontSize: '12px',
-                                            fontWeight: 'bold' 
-                                        }}
-                                    >
-                                        Pitching
-                                    </button>
-                                    <button 
-                                        type="button"
-                                        onClick={() => { setSubView('analytics'); setSortField(null); }} 
-                                        className={`tab-btn ${subView === 'analytics' ? 'active' : ''}`}
-                                        style={{ 
-                                            padding: '4px 10px', 
-                                            background: subView === 'analytics' ? 'var(--accent-bg)' : 'transparent', 
-                                            border: '1px solid ' + (subView === 'analytics' ? 'var(--accent)' : 'var(--border)'),
-                                            color: subView === 'analytics' ? 'var(--accent)' : 'var(--text)', 
-                                            cursor: 'pointer', 
-                                            borderRadius: '6px', 
-                                            fontSize: '12px',
-                                            fontWeight: 'bold',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            gap: '4px'
-                                        }}
-                                    >
-                                        <TrendingUp size={12} /> Analytics
-                                    </button>
+                                            Batting
+                                        </button>
+                                        <button 
+                                            type="button"
+                                            onClick={() => { setSubView('pitching'); setSortField(null); }} 
+                                            className={`tab-btn ${subView === 'pitching' ? 'active' : ''}`}
+                                            style={{ 
+                                                padding: '4px 10px', 
+                                                background: subView === 'pitching' ? 'var(--accent-bg)' : 'transparent', 
+                                                border: '1px solid ' + (subView === 'pitching' ? 'var(--accent)' : 'var(--border)'),
+                                                color: subView === 'pitching' ? 'var(--accent)' : 'var(--text)', 
+                                                cursor: 'pointer', 
+                                                borderRadius: '6px', 
+                                                fontSize: '12px',
+                                                fontWeight: 'bold' 
+                                            }}
+                                        >
+                                            Pitching
+                                        </button>
+                                        <button 
+                                            type="button"
+                                            onClick={() => { setSubView('fielding'); setSortField(null); }} 
+                                            className={`tab-btn ${subView === 'fielding' ? 'active' : ''}`}
+                                            style={{ 
+                                                padding: '4px 10px', 
+                                                background: subView === 'fielding' ? 'var(--accent-bg)' : 'transparent', 
+                                                border: '1px solid ' + (subView === 'fielding' ? 'var(--accent)' : 'var(--border)'),
+                                                color: subView === 'fielding' ? 'var(--accent)' : 'var(--text)', 
+                                                cursor: 'pointer', 
+                                                borderRadius: '6px', 
+                                                fontSize: '12px',
+                                                fontWeight: 'bold' 
+                                            }}
+                                        >
+                                            Fielding
+                                        </button>
+                                        <button 
+                                            type="button"
+                                            onClick={() => { setSubView('catching'); setSortField(null); }} 
+                                            className={`tab-btn ${subView === 'catching' ? 'active' : ''}`}
+                                            style={{ 
+                                                padding: '4px 10px', 
+                                                background: subView === 'catching' ? 'var(--accent-bg)' : 'transparent', 
+                                                border: '1px solid ' + (subView === 'catching' ? 'var(--accent)' : 'var(--border)'),
+                                                color: subView === 'catching' ? 'var(--accent)' : 'var(--text)', 
+                                                cursor: 'pointer', 
+                                                borderRadius: '6px', 
+                                                fontSize: '12px',
+                                                fontWeight: 'bold' 
+                                            }}
+                                        >
+                                            Catching
+                                        </button>
+                                        <button 
+                                            type="button"
+                                            onClick={() => { setSubView('analytics'); setSortField(null); }} 
+                                            className={`tab-btn ${subView === 'analytics' ? 'active' : ''}`}
+                                            style={{ 
+                                                padding: '4px 10px', 
+                                                background: subView === 'analytics' ? 'var(--accent-bg)' : 'transparent', 
+                                                border: '1px solid ' + (subView === 'analytics' ? 'var(--accent)' : 'var(--border)'),
+                                                color: subView === 'analytics' ? 'var(--accent)' : 'var(--text)', 
+                                                cursor: 'pointer', 
+                                                borderRadius: '6px', 
+                                                fontSize: '12px',
+                                                fontWeight: 'bold',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '4px'
+                                            }}
+                                        >
+                                            <TrendingUp size={12} /> Analytics
+                                        </button>
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', gap: '8px' }}>
@@ -855,20 +1026,20 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                             </div>
 
                             {loading && players.length === 0 ? (
-                            <div style={{ padding: '24px', textAlign: 'center' }}>Loading players...</div>
-                        ) : players.length === 0 ? (
-                            <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text)' }}>
-                                📋 No players added to the roster yet. Add your first player!
-                            </div>
-                        ) : subView === 'analytics' ? (
-                            <PitchingAnalyticsView 
-                                players={players} 
-                                selectedPitcherId={selectedPitcherId} 
-                                onSelectPitcher={setSelectedPitcherId} 
-                                inningsPerGame={teams.find(t => t.id === selectedTeamId)?.innings_per_game || 7}
-                            />
-                        ) : (
-                            <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: '8px' }}>
+                                <div style={{ padding: '24px', textAlign: 'center' }}>Loading players...</div>
+                            ) : players.length === 0 ? (
+                                <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text)' }}>
+                                    📋 No players added to the roster yet. Add your first player!
+                                </div>
+                            ) : subView === 'analytics' ? (
+                                <PitchingAnalyticsView 
+                                    players={players} 
+                                    selectedPitcherId={selectedPitcherId} 
+                                    onSelectPitcher={setSelectedPitcherId} 
+                                    inningsPerGame={teams.find(t => t.id === selectedTeamId)?.innings_per_game || 7}
+                                />
+                            ) : (
+                                <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: '8px' }}>
                                     <table className="players-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px', textAlign: 'left' }}>
                                         <thead>
                                             <tr style={{ background: 'var(--code-bg)', borderBottom: '1px solid var(--border)' }}>
@@ -920,7 +1091,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                                             OBP {sortField === 'on_base_percentage' && (sortDirection === 'asc' ? '↑' : '↓')}
                                                         </th>
                                                     </>
-                                                ) : (
+                                                ) : subView === 'pitching' ? (
                                                     <>
                                                         <th onClick={() => handleSort('games_pitched')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
                                                             GP {sortField === 'games_pitched' && (sortDirection === 'asc' ? '↑' : '↓')}
@@ -965,6 +1136,48 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                                             LOB {sortField === 'left_on_base' && (sortDirection === 'asc' ? '↑' : '↓')}
                                                         </th>
                                                     </>
+                                                ) : subView === 'fielding' ? (
+                                                    <>
+                                                        <th onClick={() => handleSort('games_played')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            GP {sortField === 'games_played' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('total_chances')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            TC {sortField === 'total_chances' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('putouts')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            PO {sortField === 'putouts' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('assists')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            A {sortField === 'assists' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('errors')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            E {sortField === 'errors' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('fielding_percentage')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            FPCT {sortField === 'fielding_percentage' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <th onClick={() => handleSort('games_played')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            GP {sortField === 'games_played' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('innings_caught')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            IC {sortField === 'innings_caught' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('passed_balls_allowed')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            PB {sortField === 'passed_balls_allowed' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('runners_stolen_bases')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            SBA {sortField === 'runners_stolen_bases' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('runners_caught_stealing')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            CS {sortField === 'runners_caught_stealing' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                        <th onClick={() => handleSort('caught_stealing_percentage')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                                                            CS% {sortField === 'caught_stealing_percentage' && (sortDirection === 'asc' ? '↑' : '↓')}
+                                                        </th>
+                                                    </>
                                                 )}
                                                 <th style={{ padding: '10px 12px', textAlign: 'center', userSelect: 'none' }}>Actions</th>
                                             </tr>
@@ -994,7 +1207,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                                                 {p.on_base_percentage.toFixed(3).replace(/^0+/, '')}
                                                             </td>
                                                         </>
-                                                    ) : (
+                                                    ) : subView === 'pitching' ? (
                                                         <>
                                                             <td style={{ padding: '10px 12px' }}>{p.games_pitched}</td>
                                                             <td style={{ padding: '10px 12px' }}>{p.innings_pitched.toFixed(1)}</td>
@@ -1015,6 +1228,28 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                                             </td>
                                                             <td style={{ padding: '10px 12px' }}>{p.left_on_base}</td>
                                                         </>
+                                                    ) : subView === 'fielding' ? (
+                                                        <>
+                                                            <td style={{ padding: '10px 12px' }}>{p.games_played}</td>
+                                                            <td style={{ padding: '10px 12px' }}>{p.total_chances}</td>
+                                                            <td style={{ padding: '10px 12px' }}>{p.putouts}</td>
+                                                            <td style={{ padding: '10px 12px' }}>{p.assists}</td>
+                                                            <td style={{ padding: '10px 12px' }}>{p.errors}</td>
+                                                            <td style={{ padding: '10px 12px', color: 'var(--accent)', fontWeight: 'bold' }}>
+                                                                {(p.fielding_percentage || 0).toFixed(3)}
+                                                            </td>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <td style={{ padding: '10px 12px' }}>{p.games_played}</td>
+                                                            <td style={{ padding: '10px 12px' }}>{(p.innings_caught || 0).toFixed(1)}</td>
+                                                            <td style={{ padding: '10px 12px' }}>{p.passed_balls_allowed}</td>
+                                                            <td style={{ padding: '10px 12px' }}>{p.runners_stolen_bases}</td>
+                                                            <td style={{ padding: '10px 12px' }}>{p.runners_caught_stealing}</td>
+                                                            <td style={{ padding: '10px 12px', color: 'var(--accent)', fontWeight: 'bold' }}>
+                                                                {(p.caught_stealing_percentage || 0).toFixed(3)}
+                                                            </td>
+                                                        </>
                                                     )}
                                                     <td style={{ padding: '10px 12px', display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
                                                         <button onClick={() => startEditingPlayer(p)} className="btn-edit-team-pencil" style={{ background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer', padding: '4px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center' }}>
@@ -1033,7 +1268,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                         </div>
                     )
                 )}
-                            {/* GameChanger Import Review Modal */}
+                {/* GameChanger Import Review Modal */}
                 {showImportModal && (
                     <div className="modal-overlay" style={{ zIndex: 1100 }}>
                         <div className="team-manager-card" style={{ width: '680px', maxHeight: '80%', display: 'flex', flexDirection: 'column' }}>
@@ -1129,11 +1364,9 @@ export function PitchingAnalyticsView({
     onSelectPitcher: (id: number) => void;
     inningsPerGame?: number;
 }) {
-    // Filter out only players who have logged pitching stats and thrown at least 1 pitch
     const pitchers: PitchingStats[] = players.filter(p => p.games_pitched > 0 && p.number_of_pitches > 0);
     const [hoveredPitcherId, setHoveredPitcherId] = React.useState<number | null>(null);
 
-    // Auto-select the first pitcher if none is currently selected
     React.useEffect(() => {
         if (pitchers.length > 0 && selectedPitcherId === null) {
             onSelectPitcher(pitchers[0].id);
@@ -1150,9 +1383,6 @@ export function PitchingAnalyticsView({
         );
     }
 
-    // ----------------------------------------------------
-    // Scatter Plot math mappings
-    // ----------------------------------------------------
     const plotW = 450;
     const plotH = 320;
     const marginL = 50;
@@ -1168,7 +1398,6 @@ export function PitchingAnalyticsView({
     const minY = Math.max(0, Math.min(0.5, ...whipArray) - 0.2);
     const maxY = Math.max(3.0, ...whipArray) + 0.3;
 
-    // Generate 4 dynamic ticks for each axis
     const xTicks = Array.from({ length: 4 }).map((_, i) => {
         const step = (maxX - minX) / 3;
         return Math.round(minX + step * i);
@@ -1189,7 +1418,6 @@ export function PitchingAnalyticsView({
         return (plotH - marginB) - ((clamped - minY) / (maxY - minY)) * chartH;
     };
 
-    // Helper to extract 2-letter initials (e.g. "Scarlett S" -> "SS")
     const getInitials = (name: string) => {
         const parts = name.split(' ');
         if (parts.length >= 2) {
@@ -1198,7 +1426,6 @@ export function PitchingAnalyticsView({
         return name.substring(0, 2).toUpperCase();
     };
 
-    // Sort pitchers so that selected and hovered dots are drawn LAST (renders on top in SVG)
     const sortedPitchersForPlot = [...pitchers].sort((a, b) => {
         const aActive = a.id === activePitcher.id || a.id === hoveredPitcherId;
         const bActive = b.id === activePitcher.id || b.id === hoveredPitcherId;
@@ -1207,19 +1434,15 @@ export function PitchingAnalyticsView({
         return 0;
     });
 
-    // ----------------------------------------------------
-    // Radar Chart math mappings
-    // ----------------------------------------------------
     const radarCenter = 130;
     const radarRadius = 80;
 
     const getRadarPoints = (pitcher: PitchingStats) => {
-        // Normalization formulas (0 to 100)
-        const runPrevention = Math.max(0, 100 - (pitcher.era * 10)); // ERA 0 = 100, ERA 10+ = 0
-        const runnerControl = Math.max(0, 100 - ((pitcher.whip - 0.5) * 40)); // WHIP 0.5 = 100, WHIP 3.0+ = 0
-        const missedBats = Math.min(100, pitcher.k7 * (50 / inningsPerGame)); // K/Game benchmark scaled (2 SO per inning = 100%)
-        const command = Math.max(0, 100 - (pitcher.bb7 * (116.67 / inningsPerGame))); // BB/Game benchmark scaled (6 BB per 7 innings = 0% command)
-        const efficiency = Math.max(0, 100 - ((pitcher.pitches_per_inning - 10) * 8.33)); // Pitches/Inning 10 = 100, 22+ = 0
+        const runPrevention = Math.max(0, 100 - (pitcher.era * 10));
+        const runnerControl = Math.max(0, 100 - ((pitcher.whip - 0.5) * 40));
+        const missedBats = Math.min(100, pitcher.k7 * (50 / inningsPerGame));
+        const command = Math.max(0, 100 - (pitcher.bb7 * (116.67 / inningsPerGame)));
+        const efficiency = Math.max(0, 100 - ((pitcher.pitches_per_inning - 10) * 8.33));
 
         const scores = [runPrevention, runnerControl, missedBats, command, efficiency];
         
@@ -1251,9 +1474,7 @@ export function PitchingAnalyticsView({
                 
                 <svg width={plotW} height={plotH} style={{ overflow: 'visible' }}>
                     {/* Quadrant Background shading */}
-                    {/* Top Right: Struggling (High Pitches / High WHIP) */}
                     <rect x={getPlotX(15)} y={20} width={getPlotX(maxX) - getPlotX(15)} height={getPlotY(minY) - getPlotY(1.2)} fill="rgba(239, 68, 68, 0.03)" />
-                    {/* Bottom Left: Elite Control (Low Pitches / Low WHIP) */}
                     <rect x={getPlotX(minX)} y={getPlotY(1.2)} width={getPlotX(15) - getPlotX(minX)} height={getPlotY(1.2) - getPlotY(maxY)} fill="rgba(16, 185, 129, 0.04)" />
 
                     {/* Grid Lines */}
@@ -1303,30 +1524,27 @@ export function PitchingAnalyticsView({
                                 onMouseEnter={() => setHoveredPitcherId(p.id)}
                                 onMouseLeave={() => setHoveredPitcherId(null)}
                             >
-                                {/* Glow backdrop for selected/hovered nodes */}
                                 {(isSelected || isHovered) && (
                                     <circle cx={cx} cy={cy} r={isSelected ? "15" : "12"} fill="rgba(16, 185, 129, 0.25)" />
                                 )}
                                 
-                                {/* Node circle */}
                                 <circle 
                                     cx={cx} 
                                     cy={cy} 
                                     r={isSelected ? "10" : "8"} 
-                                    fill={isSelected ? "var(--accent)" : "var(--accent-bg)"} 
-                                    stroke="var(--accent)"
+                                    fill={isSelected ? "var(--accent)" : "rgba(255, 255, 255, 0.15)"} 
+                                    stroke={isSelected ? "var(--card-bg)" : "var(--border)"} 
                                     strokeWidth={isSelected ? "2.5" : "1.5"}
+                                    style={{ transition: 'all 0.15s ease-out' }}
                                 />
-                                
-                                {/* Initials text inside the circle */}
                                 <text 
                                     x={cx} 
                                     y={cy + 3} 
+                                    textAnchor="middle" 
+                                    fill={isSelected ? "var(--card-bg)" : "var(--text)"} 
                                     fontSize="8px" 
-                                    fill={isSelected ? "var(--card-bg)" : "var(--text)"}
                                     fontWeight="bold"
-                                    textAnchor="middle"
-                                    style={{ pointerEvents: 'none' }}
+                                    style={{ pointerEvents: 'none', userSelect: 'none' }}
                                 >
                                     {getInitials(p.player_name)}
                                 </text>
@@ -1334,7 +1552,7 @@ export function PitchingAnalyticsView({
                         );
                     })}
 
-                    {/* Interactive Tooltip Overlay */}
+                    {/* Interactive Tooltip popup */}
                     {hoveredPitcherId !== null && (
                         (() => {
                             const hp = pitchers.find(p => p.id === hoveredPitcherId);
@@ -1344,9 +1562,7 @@ export function PitchingAnalyticsView({
                             const tooltipW = 120;
                             const tooltipH = 50;
                             
-                            // Prevent tooltip going off left/right
                             const tooltipX = tx + 12 + tooltipW > plotW ? tx - 12 - tooltipW : tx + 12;
-                            // Prevent tooltip going off top/bottom
                             const tooltipY = Math.max(10, Math.min(plotH - marginB - tooltipH, ty - 25));
 
                             return (
@@ -1437,7 +1653,6 @@ export function PitchingAnalyticsView({
                 <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '16px', alignItems: 'center' }}>
                     {/* Radar Chart Display */}
                     <svg width="260" height="260" style={{ overflow: 'visible' }}>
-                        {/* pentagonal level grids */}
                         {[20, 40, 60, 80, 100].map(level => {
                             const gridPoints = Array.from({ length: 5 }).map((_, i) => {
                                 const angle = (Math.PI * 2 / 5) * i - Math.PI / 2;
@@ -1466,7 +1681,6 @@ export function PitchingAnalyticsView({
                             return (
                                 <g key={i}>
                                     <line x1={radarCenter} y1={radarCenter} x2={xOuter} y2={yOuter} stroke="var(--border)" strokeWidth="0.8" />
-                                    {/* Labels */}
                                     <text 
                                         x={radarCenter + (radarRadius + 14) * Math.cos(angle)} 
                                         y={radarCenter + (radarRadius + 14) * Math.sin(angle) + 4} 
