@@ -1170,9 +1170,6 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <th onClick={() => handleSort('games_played')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
-                                                            GP {sortField === 'games_played' && (sortDirection === 'asc' ? '↑' : '↓')}
-                                                        </th>
                                                         <th onClick={() => handleSort('innings_caught')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
                                                             IC {sortField === 'innings_caught' && (sortDirection === 'asc' ? '↑' : '↓')}
                                                         </th>
@@ -1252,7 +1249,6 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                                         </>
                                                     ) : (
                                                         <>
-                                                            <td style={{ padding: '10px 12px' }}>{p.games_played}</td>
                                                             <td style={{ padding: '10px 12px' }}>{(p.innings_caught || 0).toFixed(1)}</td>
                                                             <td style={{ padding: '10px 12px' }}>{p.passed_balls_allowed}</td>
                                                             <td style={{ padding: '10px 12px' }}>{p.runners_stolen_bases}</td>
