@@ -168,7 +168,9 @@ def build_agent_executor(coach_id: int, selected_team_id: int | None = None):
                         f"RunsAllowed={p.get('runs_allowed', 0)}, EarnedRuns={p.get('earned_runs', 0)}, "
                         f"WalksAllowed={p.get('walks_allowed', 0)}, StrikeoutsThrown={p.get('strikeouts_thrown', 0)}, "
                         f"HitBatters={p.get('hit_by_pitches_allowed', 0)}, LeftOnBase={p.get('left_on_base', 0)}, "
-                        f"ERA={p.get('era', 0.0):.2f}, WHIP={p.get('whip', 0.0):.2f}"
+                        f"ERA={p.get('era', 0.0):.2f}, WHIP={p.get('whip', 0.0):.2f}, "
+                        f"K7={p.get('k7', 0.0):.2f}, BB7={p.get('bb7', 0.0):.2f}, "
+                        f"PitchesPerInning={p.get('pitches_per_inning', 0.0):.1f}, KtoBBRatio={p.get('k_bb_ratio', 0.0):.2f}"
                     )
                 output.append(f"- **{p['player_name']}** (Jersey #{p['player_number']}, Bats: {p['handedness']}) - {batting}{pitching}")
             return "\n".join(output)
