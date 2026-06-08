@@ -536,6 +536,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
 
             // Slice raw headers and clean them by removing all whitespace/quotes and converting to uppercase
             const cleanHeader = (h: string) => h.replace(/"/g, '').replace(/\s+/g, '').trim().toUpperCase();
+            const cleanHeaders = rawHeaders.map(cleanHeader);
             
             // Slice headers into Batting (0 to BA) and Pitching (from BC / index 54 onwards)
             const battingHeaders = rawHeaders.slice(0, lastBattingColIdx + 1).map(cleanHeader);
@@ -577,7 +578,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                     return parseFloat(pitchingValues[idx].replace(/"/g, '')) || defaultVal;
                 };
 
-                // Unified lookup helper checking both batting and pitching columns for new stats
+                        // Unified lookup helper checking both batting and pitching columns for new stats
                 const getVal = (colNames: string[], defaultVal = 0) => {
                     let idx = battingHeaders.findIndex(h => colNames.includes(h));
                     if (idx !== -1 && battingValues[idx]) return parseInt(battingValues[idx].replace(/"/g, '')) || defaultVal;
@@ -587,12 +588,22 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                     return defaultVal;
                 };
 
-                const getValFloat = (colNames: string[], defaultVal = 0.0) => {
-                    let idx = battingHeaders.findIndex(h => colNames.includes(h));
-                    if (idx !== -1 && battingValues[idx]) return parseFloat(battingValues[idx].replace(/"/g, '')) || defaultVal;
-                    
-                    idx = pitchingHeaders.findIndex(h => colNames.includes(h));
-                    if (idx !== -1 && pitchingValues[idx]) return parseFloat(pitchingValues[idx].replace(/"/g, '')) || defaultVal;
+
+                // Check if the catching section exists in the CSV
+                const hasCatchingSection = cleanHeaders.some(h => ["INN", "IC", "INNINGSCAUGHT", "PB", "PASSEDBALLS"].includes(h));
+
+                // Unified lookup helper checking from the right of the row to avoid batting/pitching collisions
+                const getCatcherVal = (colNames: string[], defaultVal = 0) => {
+                    if (!hasCatchingSection) return defaultVal;
+                    const idx = cleanHeaders.map(h => colNames.includes(h)).lastIndexOf(true);
+                    if (idx !== -1 && rawValues[idx]) return parseInt(rawValues[idx].replace(/"/g, '')) || defaultVal;
+                    return defaultVal;
+                };
+
+                const getCatcherValFloat = (colNames: string[], defaultVal = 0.0) => {
+                    if (!hasCatchingSection) return defaultVal;
+                    const idx = cleanHeaders.map(h => colNames.includes(h)).lastIndexOf(true);
+                    if (idx !== -1 && rawValues[idx]) return parseFloat(rawValues[idx].replace(/"/g, '')) || defaultVal;
                     return defaultVal;
                 };
 
@@ -654,11 +665,11 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                     putouts: getVal(["PO", "PUTOUTS", "PUTOUT"]),
                     errors: getVal(["E", "ERRORS", "ERROR"]),
 
-                    // Catching stats mapping (from CSV)
-                    innings_caught: getValFloat(["IC", "INNINGSCAUGHT"]),
-                    passed_balls_allowed: getVal(["PB", "PASSEDBALLS", "PASSEDBALL"]),
-                    runners_stolen_bases: getVal(["SBA", "RUNNERSSTOLENBASES", "SBAAGAINST"]),
-                    runners_caught_stealing: getVal(["CS", "RUNNERSCAUGHTSTEALING", "CSAGAINST"])
+                    // Catching stats mapping (from CSV - look up rightmost columns to prevent collisions)
+                    innings_caught: getCatcherValFloat(["INN", "IC", "INNINGSCAUGHT"]),
+                    passed_balls_allowed: getCatcherVal(["PB", "PASSEDBALLS", "PASSEDBALL"]),
+                    runners_stolen_bases: getCatcherVal(["SB", "SBA", "RUNNERSSTOLENBASES", "SBAAGAINST"]),
+                    runners_caught_stealing: getCatcherVal(["CS", "RUNNERSCAUGHTSTEALING", "CSAGAINST"])
                 });
             }
             
