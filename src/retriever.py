@@ -157,7 +157,10 @@ def build_agent_executor(coach_id: int, selected_team_id: int | None = None):
                 batting = (
                     f"Batting: GP={p.get('games_played', 0)}, PA={p.get('plate_appearances', 0)}, "
                     f"AB={p.get('at_bats', 0)}, H={p.get('hits', 0)}, AVG={p.get('batting_average', 0.0):.3f}, "
-                    f"OBP={p.get('on_base_percentage', 0.0):.3f}, HR={p.get('home_runs', 0)}, RBI={p.get('runs_batted_in', 0)}, "
+                    f"OBP={p.get('on_base_percentage', 0.0):.3f}, SLG={p.get('slugging_percentage', 0.0):.3f}, "
+                    f"OPS={p.get('ops', 0.0):.3f}, ISO={p.get('isolated_power', 0.0):.3f}, "
+                    f"BBK_Ratio={p.get('bb_k_ratio', 0.0):.2f}, SB_PCT={p.get('stolen_base_percentage', 0.0):.3f}, "
+                    f"HR={p.get('home_runs', 0)}, RBI={p.get('runs_batted_in', 0)}, "
                     f"R={p.get('runs_scored', 0)}, BB={p.get('walks', 0)}, SO={p.get('strikeouts', 0)}, "
                     f"HBP={p.get('hit_by_pitches', 0)}, SB={p.get('stolen_bases', 0)}, CS={p.get('caught_stealing', 0)}, "
                     f"1B={p.get('singles', 0)}, 2B={p.get('doubles', 0)}, 3B={p.get('triples', 0)}"
