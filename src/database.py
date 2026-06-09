@@ -217,6 +217,32 @@ def update_team(coach_id: int, team_id: int, team_name: str, season: str, wins: 
         cursor.close()
         conn.close()
 
+def add_fractional_innings(val1: float, val2: float) -> float:
+    """Correctly adds two softball fractional innings values.
+    Example: 4.2 + 2.1 = 7.0 and not 6.3 (4 full innings and 2 outs + 2 full innings and 1 out = 7 full innings)
+    """
+    def to_outs(val: float) -> int:
+        whole = int(val)
+        fraction = round(val - whole, 1)
+        outs = whole * 3
+        if fraction == 0.1:
+            outs += 1
+        elif fraction == 0.2:
+            outs += 2
+        return outs
+
+    total_outs = to_outs(val1) + to_outs(val2)
+    whole_innings = total_outs // 3
+    remaining_outs = total_outs % 3
+
+    if remaining_outs == 0:
+        return float(whole_innings)
+    elif remaining_outs == 1:
+        return whole_innings + 0.1
+    elif remaining_outs == 2:
+        return whole_innings + 0.2
+    return 0.0
+
 def convert_ip_to_actual(ip: float) -> float:
     """Converts scoring notation (ex: 4.1, 4.2) to actual decimal innings (ex: 4.333, 4.667)."""
     whole = int(ip)
@@ -433,7 +459,16 @@ def get_team_players(team_id: int):
                 COALESCE(c.innings_caught, 0.0) as innings_caught,
                 COALESCE(c.passed_balls_allowed, 0) as passed_balls_allowed,
                 COALESCE(c.runners_stolen_bases, 0) as runners_stolen_bases,
-                COALESCE(c.runners_caught_stealing, 0) as runners_caught_stealing
+                COALESCE(c.runners_caught_stealing, 0) as runners_caught_stealing,
+                COALESCE(d.innings_p, 0.0) as innings_p,
+                COALESCE(d.innings_c, 0.0) as innings_c,
+                COALESCE(d.innings_1b, 0.0) as innings_1b,
+                COALESCE(d.innings_2b, 0.0) as innings_2b,
+                COALESCE(d.innings_3b, 0.0) as innings_3b,
+                COALESCE(d.innings_ss, 0.0) as innings_ss,
+                COALESCE(d.innings_lf, 0.0) as innings_lf,
+                COALESCE(d.innings_cf, 0.0) as innings_cf,
+                COALESCE(d.innings_rf, 0.0) as innings_rf
             FROM players p
             LEFT JOIN teams t ON p.team_id = t.id
             LEFT JOIN offensive_stats o ON p.id = o.player_id
@@ -537,17 +572,26 @@ def update_player_stats(player_id: int, stats: dict):
         cursor.execute(
             """
             INSERT INTO defensive_stats (
-                player_id, team_id, total_chances, assists, putouts, errors, updated_at
+                player_id, team_id, total_chances, assists, putouts, errors,
+                innings_p, innings_c, innings_1b, innings_2b, innings_3b, innings_ss, innings_lf, innings_cf, innings_rf, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
             ON CONFLICT (player_id) DO UPDATE
             SET total_chances = EXCLUDED.total_chances, assists = EXCLUDED.assists,
-                putouts = EXCLUDED.putouts, errors = EXCLUDED.errors, updated_at = CURRENT_TIMESTAMP
+                putouts = EXCLUDED.putouts, errors = EXCLUDED.errors,
+                innings_p = EXCLUDED.innings_p, innings_c = EXCLUDED.innings_c,
+                innings_1b = EXCLUDED.innings_1b, innings_2b = EXCLUDED.innings_2b,
+                innings_3b = EXCLUDED.innings_3b, innings_ss = EXCLUDED.innings_ss,
+                innings_lf = EXCLUDED.innings_lf, innings_cf = EXCLUDED.innings_cf,
+                innings_rf = EXCLUDED.innings_rf, updated_at = CURRENT_TIMESTAMP
             RETURNING *;
             """,
             (
                 player_id, player_row["team_id"], stats.get("total_chances", 0), stats.get("assists", 0),
-                stats.get("putouts", 0), stats.get("errors", 0)
+                stats.get("putouts", 0), stats.get("errors", 0),
+                stats.get("innings_p", 0.0), stats.get("innings_c", 0.0), stats.get("innings_1b", 0.0),
+                stats.get("innings_2b", 0.0), stats.get("innings_3b", 0.0), stats.get("innings_ss", 0.0),
+                stats.get("innings_lf", 0.0), stats.get("innings_cf", 0.0), stats.get("innings_rf", 0.0)
             )
         )
         def_row = cursor.fetchone()
@@ -598,6 +642,15 @@ def update_player_stats(player_id: int, stats: dict):
             "assists": def_row["assists"],
             "putouts": def_row["putouts"],
             "errors": def_row["errors"],
+            "innings_p": float(def_row["innings_p"] or 0.0),
+            "innings_c": float(def_row["innings_c"] or 0.0),
+            "innings_1b": float(def_row["innings_1b"] or 0.0),
+            "innings_2b": float(def_row["innings_2b"] or 0.0),
+            "innings_3b": float(def_row["innings_3b"] or 0.0),
+            "innings_ss": float(def_row["innings_ss"] or 0.0),
+            "innings_lf": float(def_row["innings_lf"] or 0.0),
+            "innings_cf": float(def_row["innings_cf"] or 0.0),
+            "innings_rf": float(def_row["innings_rf"] or 0.0),
             "innings_caught": float(cat_row["innings_caught"]),
             "passed_balls_allowed": cat_row["passed_balls_allowed"],
             "runners_stolen_bases": cat_row["runners_stolen_bases"],
@@ -749,21 +802,41 @@ def bulk_update_player_stats(team_id: int, updates: list):
                         "strikeouts": 0, "hit_by_pitches": 0, "left_on_base": 0
                     }
 
+            # Fetch existing defensive stats to sum correctly
+            cursor.execute("SELECT * FROM defensive_stats WHERE player_id = %s LIMIT 1;", (player_id,))
+            existing_def = cursor.fetchone() or {}
+
+            new_inn_p = add_fractional_innings(float(existing_def.get("innings_p") or 0.0), float(p.get("innings_p") or 0.0))
+            new_inn_c = add_fractional_innings(float(existing_def.get("innings_c") or 0.0), float(p.get("innings_c") or 0.0))
+            new_inn_1b = add_fractional_innings(float(existing_def.get("innings_1b") or 0.0), float(p.get("innings_1b") or 0.0))
+            new_inn_2b = add_fractional_innings(float(existing_def.get("innings_2b") or 0.0), float(p.get("innings_2b") or 0.0))
+            new_inn_3b = add_fractional_innings(float(existing_def.get("innings_3b") or 0.0), float(p.get("innings_3b") or 0.0))
+            new_inn_ss = add_fractional_innings(float(existing_def.get("innings_ss") or 0.0), float(p.get("innings_ss") or 0.0))
+            new_inn_lf = add_fractional_innings(float(existing_def.get("innings_lf") or 0.0), float(p.get("innings_lf") or 0.0))
+            new_inn_cf = add_fractional_innings(float(existing_def.get("innings_cf") or 0.0), float(p.get("innings_cf") or 0.0))
+            new_inn_rf = add_fractional_innings(float(existing_def.get("innings_rf") or 0.0), float(p.get("innings_rf") or 0.0))
+
             # Update defensive_stats
             cursor.execute(
                 """
                 INSERT INTO defensive_stats (
-                    player_id, team_id, total_chances, assists, putouts, errors, updated_at
+                    player_id, team_id, total_chances, assists, putouts, errors,
+                    innings_p, innings_c, innings_1b, innings_2b, innings_3b, innings_ss, innings_lf, innings_cf, innings_rf, updated_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
                 ON CONFLICT (player_id) DO UPDATE
                 SET total_chances = EXCLUDED.total_chances, assists = EXCLUDED.assists,
-                    putouts = EXCLUDED.putouts, errors = EXCLUDED.errors, updated_at = CURRENT_TIMESTAMP
+                    putouts = EXCLUDED.putouts, errors = EXCLUDED.errors,
+                    innings_p = EXCLUDED.innings_p, innings_c = EXCLUDED.innings_c,
+                    innings_1b = EXCLUDED.innings_1b, innings_2b = EXCLUDED.innings_2b,
+                    innings_3b = EXCLUDED.innings_3b, innings_ss = EXCLUDED.innings_ss,
+                    innings_lf = EXCLUDED.innings_lf, innings_cf = EXCLUDED.innings_cf,
+                    innings_rf = EXCLUDED.innings_rf, updated_at = CURRENT_TIMESTAMP
                 RETURNING *;
                 """,
                 (
-                    player_id, team_id, p.get("total_chances", 0), p.get("assists", 0),
-                    p.get("putouts", 0), p.get("errors", 0)
+                    player_id, team_id, p.get("total_chances", 0), p.get("assists", 0), p.get("putouts", 0), p.get("errors", 0),
+                    new_inn_p, new_inn_c, new_inn_1b, new_inn_2b, new_inn_3b, new_inn_ss, new_inn_lf, new_inn_cf, new_inn_rf
                 )
             )
             def_row = cursor.fetchone()
@@ -807,6 +880,15 @@ def bulk_update_player_stats(team_id: int, updates: list):
                     "assists": def_row["assists"],
                     "putouts": def_row["putouts"],
                     "errors": def_row["errors"],
+                    "innings_p": float(def_row["innings_p"] or 0.0),
+                    "innings_c": float(def_row["innings_c"] or 0.0),
+                    "innings_1b": float(def_row["innings_1b"] or 0.0),
+                    "innings_2b": float(def_row["innings_2b"] or 0.0),
+                    "innings_3b": float(def_row["innings_3b"] or 0.0),
+                    "innings_ss": float(def_row["innings_ss"] or 0.0),
+                    "innings_lf": float(def_row["innings_lf"] or 0.0),
+                    "innings_cf": float(def_row["innings_cf"] or 0.0),
+                    "innings_rf": float(def_row["innings_rf"] or 0.0),
                     "innings_caught": float(cat_row["innings_caught"]),
                     "passed_balls_allowed": cat_row["passed_balls_allowed"],
                     "runners_stolen_bases": cat_row["runners_stolen_bases"],

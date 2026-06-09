@@ -196,7 +196,17 @@ def build_agent_executor(coach_id: int, selected_team_id: int | None = None):
                         f"CS_PCT={p.get('caught_stealing_percentage', 0.0):.3f}"
                     )
                 
-                output.append(f"- **{p['player_name']}** (Jersey #{p['player_number']}, Bats: {p.get('batting_hand', 'Right')}, Throws: {p.get('throwing_hand', 'Right')}) - {batting}{pitching}{fielding}{catching}")
+                # Format position innings stats (NEW)
+                pos_list = []
+                for pos_name, key in [("P", "innings_p"), ("C", "innings_c"), ("1B", "innings_1b"), ("2B", "innings_2b"), ("3B", "innings_3b"), ("SS", "innings_ss"), ("LF", "innings_lf"), ("CF", "innings_cf"), ("RF", "innings_rf")]:
+                    val = p.get(key, 0.0)
+                    if val > 0:
+                        pos_list.append(f"{pos_name}={val:.1f}")
+                pos_innings = ""
+                if pos_list:
+                    pos_innings = f" | PositionInnings: {', '.join(pos_list)}"
+                
+                output.append(f"- **{p['player_name']}** (Jersey #{p['player_number']}, Bats: {p.get('batting_hand', 'Right')}, Throws: {p.get('throwing_hand', 'Right')}) - {batting}{pitching}{fielding}{catching}{pos_innings}")
             return "\n".join(output)
         except Exception as e:
             return f"Error fetching team roster: {str(e)}"
@@ -226,6 +236,24 @@ def build_agent_executor(coach_id: int, selected_team_id: int | None = None):
     )
     if selected_team_id:
         system_prompt += f"The coach's active/selected team ID is {selected_team_id}.\n"
+
+    system_prompt += (
+        "\nIMPORTANT STATISTICAL NOTES FOR THE AI AGENT:\n"
+        "1. In player rosters and stats returned by tools, the 'PositionInnings' section lists innings played by each player at "
+        "specific positions: P (Pitcher), C (Catcher), 1B (First Base), 2B (Second Base), 3B (Third Base), "
+        "SS (Shortstop), LF (Left Field), CF (Center Field), and RF (Right Field).\n"
+        "2. These innings follow standard baseball/softball fractional notation: the integer part represents "
+        "full innings, and the decimal part represents partial outs (e.g., .1 means 1 out, .2 means 2 outs).\n"
+        "3. To compare two innings values accurately, convert them to total outs:\n"
+        "   - Multiply the integer (whole) number of innings by 3.\n"
+        "   - Add the decimal value (e.g., .1 adds 1, .2 adds 2, .0 adds 0).\n"
+        "   - Example: 9.1 is 9 * 3 + 1 = 28 outs. 9.0 is 9 * 3 + 0 = 27 outs. Therefore, 9.1 is greater than 9.0.\n"
+        "   - Example: 2.1 is 2 * 3 + 1 = 7 outs. 2.2 is 2 * 3 + 2 = 8 outs. Therefore, 2.1 is less than 2.2.\n"
+        "   Before answering questions about who has played the most/least or which position has the most/least innings, "
+        "calculate the total outs for each player/position to make sure you determine the correct minimum/maximum.\n"
+        "4. Keep these position stats in mind when helping coaches analyze lineup options, position depth, and rotations.\n"
+    )
+
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", system_prompt),

@@ -123,6 +123,16 @@ class PlayerUpdateRequest(BaseModel):
     passed_balls_allowed: int = 0
     runners_stolen_bases: int = 0
     runners_caught_stealing: int = 0
+    # Position innings stats (NEW)
+    innings_p: float = 0.0
+    innings_c: float = 0.0
+    innings_1b: float = 0.0
+    innings_2b: float = 0.0
+    innings_3b: float = 0.0
+    innings_ss: float = 0.0
+    innings_lf: float = 0.0
+    innings_cf: float = 0.0
+    innings_rf: float = 0.0
 
 class BulkImportPlayer(BaseModel):
     player_name: str
@@ -165,6 +175,16 @@ class BulkImportPlayer(BaseModel):
     passed_balls_allowed: int = 0
     runners_stolen_bases: int = 0
     runners_caught_stealing: int = 0
+    # Position innings stats (NEW)
+    innings_p: float = 0.0
+    innings_c: float = 0.0
+    innings_1b: float = 0.0
+    innings_2b: float = 0.0
+    innings_3b: float = 0.0
+    innings_ss: float = 0.0
+    innings_lf: float = 0.0
+    innings_cf: float = 0.0
+    innings_rf: float = 0.0
 
 class BulkImportRequest(BaseModel):
     team_id: int
