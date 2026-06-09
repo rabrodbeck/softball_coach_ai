@@ -304,13 +304,37 @@ def calculate_derived_stats(player: dict):
     pa = player.get("plate_appearances", 0)
     obp = (hits + bb + hbp) / pa if pa > 0 else 0.0
 
+    # 4. Calculate slugging percentage
+    slg = (singles + 2 * doubles + 3 * triples + 4 * home_runs) / ab if ab > 0 else 0.0
+
+    # 5. Calculate on base plus slugging
+    ops = obp + slg
+
+    # 6. Calculate isloated power
+    iso = slg - avg
+
+    # 7. Calculate walk-to-strikeout ratio
+    k = player.get("strikeouts", 0)
+    bb_k = bb / k if k > 0 else float(bb)
+
+    # 8. Calculate stolen base success rate (stolen base percentage)
+    sb = player.get("stolen_bases", 0)
+    cs = player.get("caught_stealing", 0)
+    attempts = sb + cs
+    sb_pct = sb / attempts if attempts > 0 else 0.0
+
     # Return copies of the dict containing calculated fields
     result = dict(player)
     result["hits"] = hits
     result["batting_average"] = round(avg, 3)
     result["on_base_percentage"] = round(obp, 3)
+    result["slugging_percentage"] = round(slg, 3)
+    result["ops"] = round(ops, 3)
+    result["isolated_power"] = round(iso, 3)
+    result["bb_k_ration"] = round(bb_k, 2)
+    result["stolen_base_percentage"] = round(sb_pct, 3)
     
-    # 4. Chain pitching and defensive derivations together
+    # Chain pitching and defensive derivations together
     pitching_stats = calculate_derived_pitching_stats(result, result.get("innings_per_game", 7))
     return calculate_derived_defensive_stats(pitching_stats)
 
