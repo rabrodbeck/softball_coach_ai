@@ -1591,7 +1591,7 @@ export function PitchingAnalyticsView({
     ];
 
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '24px', padding: '16px 8px', background: 'var(--card-bg)', borderRadius: '12px' }}>
+        <div className="analytics-grid" style={{ padding: '16px 8px', background: 'var(--card-bg)', borderRadius: '12px' }}>
             
             {/* 1. Left Section: Pitcher Comparison Scatter Plot */}
             <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
@@ -1599,7 +1599,7 @@ export function PitchingAnalyticsView({
                     Staff Efficiency vs. Effectiveness Matrix
                 </h4>
                 
-                <svg width={plotW} height={plotH} style={{ overflow: 'visible' }}>
+                <svg viewBox={`0 0 ${plotW} ${plotH}`} style={{ width: '100%', height: 'auto', maxWidth: plotW, overflow: 'visible' }}>
                     {/* Quadrant Background shading */}
                     <rect x={getPlotX(15)} y={20} width={getPlotX(maxX) - getPlotX(15)} height={getPlotY(minY) - getPlotY(1.2)} fill="rgba(239, 68, 68, 0.03)" />
                     <rect x={getPlotX(minX)} y={getPlotY(1.2)} width={getPlotX(15) - getPlotX(minX)} height={getPlotY(1.2) - getPlotY(maxY)} fill="rgba(16, 185, 129, 0.04)" />
@@ -1777,9 +1777,9 @@ export function PitchingAnalyticsView({
                     </span>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '16px', alignItems: 'center' }}>
+                <div className="inner-analytics-grid">
                     {/* Radar Chart Display */}
-                    <svg width="260" height="260" style={{ overflow: 'visible' }}>
+                    <svg viewBox="0 0 260 260" style={{ width: '100%', height: 'auto', maxWidth: '260px', overflow: 'visible' }}>
                         {[20, 40, 60, 80, 100].map(level => {
                             const gridPoints = Array.from({ length: 5 }).map((_, i) => {
                                 const angle = (Math.PI * 2 / 5) * i - Math.PI / 2;
@@ -2052,7 +2052,7 @@ export function BattingAnalyticsView({
     const advice = getLineupAdvice(activeBatter);
 
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '24px', padding: '16px 8px', background: 'var(--card-bg)', borderRadius: '12px' }}>
+        <div className="analytics-grid" style={{ padding: '16px 8px', background: 'var(--card-bg)', borderRadius: '12px' }}>
             
             {/* 1. Left Section: Batter Comparison Scatter Plot */}
             <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
@@ -2060,7 +2060,7 @@ export function BattingAnalyticsView({
                     Offensive Power vs. On-Base Matrix
                 </h4>
                 
-                <svg width={plotW} height={plotH} style={{ overflow: 'visible' }}>
+                <svg viewBox={`0 0 ${plotW} ${plotH}`} style={{ width: '100%', height: 'auto', maxWidth: plotW, overflow: 'visible' }}>
                     {/* Quadrant Background shading */}
                     <rect x={getPlotX(0.400)} y={getPlotY(maxY)} width={getPlotX(maxX) - getPlotX(0.400)} height={getPlotY(0.500) - getPlotY(maxY)} fill="rgba(16, 185, 129, 0.04)" />
                     <rect x={getPlotX(0.400)} y={getPlotY(0.500)} width={getPlotX(maxX) - getPlotX(0.400)} height={getPlotY(minY) - getPlotY(0.500)} fill="rgba(59, 130, 246, 0.03)" />
@@ -2210,7 +2210,7 @@ export function BattingAnalyticsView({
                     </span>
 
                     {/* Radar Chart Display */}
-                    <svg width="260" height="235" style={{ overflow: 'visible' }}>
+                    <svg viewBox="0 0 260 235" style={{ width: '100%', height: 'auto', maxWidth: '260px', overflow: 'visible' }}>
                         {/* Background pentagons */}
                         {[25, 50, 75, 100].map((level) => {
                             const points = Array.from({ length: 5 }).map((_, i) => {
@@ -2495,7 +2495,7 @@ export function FieldingAnalyticsView({
     const midY = 0.920; // benchmark fielding percentage for dividing clean vs developing
 
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '24px', padding: '16px 8px', background: 'var(--card-bg)', borderRadius: '12px' }}>
+        <div className="analytics-grid" style={{ padding: '16px 8px', background: 'var(--card-bg)', borderRadius: '12px' }}>
             
             {/* 1. Left Section: Fielder Comparison Scatter Plot */}
             <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
@@ -2503,7 +2503,7 @@ export function FieldingAnalyticsView({
                     Defensive Activity vs. Reliability Matrix
                 </h4>
                 
-                <svg width={plotW} height={plotH} style={{ overflow: 'visible' }}>
+                <svg viewBox={`0 0 ${plotW} ${plotH}`} style={{ width: '100%', height: 'auto', maxWidth: plotW, overflow: 'visible' }}>
                     {/* Quadrant Background shading */}
                     <rect x={getPlotX(midX)} y={getPlotY(maxY)} width={getPlotX(maxX) - getPlotX(midX)} height={getPlotY(midY) - getPlotY(maxY)} fill="rgba(16, 185, 129, 0.04)" />
                     <rect x={getPlotX(midX)} y={getPlotY(midY)} width={getPlotX(maxX) - getPlotX(midX)} height={getPlotY(minY) - getPlotY(midY)} fill="rgba(245, 158, 11, 0.03)" />
@@ -2653,7 +2653,7 @@ export function FieldingAnalyticsView({
                     </span>
 
                     {/* Radar Chart Display */}
-                    <svg width="260" height="235" style={{ overflow: 'visible' }}>
+                    <svg viewBox="0 0 260 235" style={{ width: '100%', height: 'auto', maxWidth: '260px', overflow: 'visible' }}>
                         {/* Background diamonds (4-axis background grids) */}
                         {[25, 50, 75, 100].map((level) => {
                             const points = Array.from({ length: 4 }).map((_, i) => {
@@ -2851,13 +2851,13 @@ export function DefensiveRotationView({
         .sort((a, b) => (b[targetKey] ?? 0) - (a[targetKey] ?? 0));
 
     return (
-        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '24px', padding: '16px 8px', background: 'var(--card-bg)', borderRadius: '12px' }}>
+        <div className="analytics-grid" style={{ padding: '16px 8px', background: 'var(--card-bg)', borderRadius: '12px' }}>
             <div style={{ background: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--border)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
                 <h4 style={{ margin: '0 0 16px 0', fontSize: '14px', color: 'var(--text)', fontWeight: 'bold', alignSelf: 'flex-start' }}>
                     Active Field Inning Leaders
                 </h4>
                 
-                <svg width="340" height="340" style={{ overflow: 'visible', background: 'rgba(0, 0, 0, 0.2)', borderRadius: '50%', border: '2px dashed var(--border)' }}>
+                <svg viewBox="0 0 340 340" style={{ width: '100%', height: 'auto', maxWidth: '340px', overflow: 'visible', background: 'rgba(0, 0, 0, 0.2)', borderRadius: '50%', border: '2px dashed var(--border)' }}>
                     <path d="M 170,300 L 40,170 A 184,184 0 0,1 300,170 Z" fill="rgba(139, 92, 26, 0.15)" stroke="var(--border)" strokeWidth="1" />
                     <rect x="165" y="295" width="10" height="10" transform="rotate(45 170 300)" fill="white" />
                     <circle cx="170" cy="180" r="24" fill="none" stroke="white" strokeWidth="1" strokeDasharray="3,3" />

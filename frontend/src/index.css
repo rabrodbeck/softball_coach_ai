@@ -801,4 +801,28 @@ code {
     grid-template-columns: repeat(3, 1fr) !important; /* Stack columns tighter */
     gap: 8px !important;
   }
-}    
+  .analytics-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+  .inner-analytics-grid {
+    grid-template-columns: 1fr !important;
+    justify-items: center;
+    text-align: center;
+  }
+}
+
+/* Base styles for responsive analytics grid layouts */
+.analytics-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 24px;
+}
+
+.inner-analytics-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 16px;
+  align-items: center;
+}
+
