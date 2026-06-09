@@ -357,8 +357,9 @@ def calculate_derived_stats(player: dict):
     result["slugging_percentage"] = round(slg, 3)
     result["ops"] = round(ops, 3)
     result["isolated_power"] = round(iso, 3)
-    result["bb_k_ration"] = round(bb_k, 2)
+    result["bb_k_ratio"] = round(bb_k, 2)
     result["stolen_base_percentage"] = round(sb_pct, 3)
+
     
     # Chain pitching and defensive derivations together
     pitching_stats = calculate_derived_pitching_stats(result, result.get("innings_per_game", 7))
