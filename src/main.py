@@ -397,3 +397,7 @@ def api_google_register(data: GoogleRegisterRequest):
         raise HTTPException(status_code=400, detail="Registration failed")
     
     return authenticate_coach(data.email, "GOOGLE_AUTH_DUMMY_PASSWORD")
+
+@app.get("/")
+def read_root():
+    return {"status": "ok", "app": "Softball Coach AI API"}
