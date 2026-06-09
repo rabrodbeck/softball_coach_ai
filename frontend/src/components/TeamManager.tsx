@@ -1861,8 +1861,8 @@ export function BattingAnalyticsView({
     const chartW = plotW - marginL - 20;
     const chartH = plotH - marginB - 20;
 
-    const obpArray = batters.map(b => b.on_base_percentage);
-    const slgArray = batters.map(b => b.slugging_percentage);
+    const obpArray = batters.map(b => b.on_base_percentage ?? 0);
+    const slgArray = batters.map(b => b.slugging_percentage ?? 0);
 
     const minX = Math.max(0.100, Math.min(0.250, ...obpArray) - 0.05);
     const maxX = Math.max(0.650, ...obpArray) + 0.05;
@@ -1910,15 +1910,15 @@ export function BattingAnalyticsView({
 
     const getRadarPoints = (batter: BattingStats) => {
         // Normalizations matching youth fastpitch benchmarks (0 to 100)
-        const contact = Math.min(100, Math.max(0, ((batter.batting_average - 0.100) / 0.350) * 100));
-        const onBase = Math.min(100, Math.max(0, ((batter.on_base_percentage - 0.150) / 0.450) * 100));
-        const power = Math.min(100, Math.max(0, ((batter.slugging_percentage - 0.150) / 0.650) * 100));
-        const discipline = Math.min(100, Math.max(0, (batter.bb_k_ratio / 1.5) * 100));
+        const contact = Math.min(100, Math.max(0, (((batter.batting_average ?? 0) - 0.100) / 0.350) * 100));
+        const onBase = Math.min(100, Math.max(0, (((batter.on_base_percentage ?? 0) - 0.150) / 0.450) * 100));
+        const power = Math.min(100, Math.max(0, (((batter.slugging_percentage ?? 0) - 0.150) / 0.650) * 100));
+        const discipline = Math.min(100, Math.max(0, ((batter.bb_k_ratio ?? 0) / 1.5) * 100));
         
         // Speed score considers both SB success rate and SB volume per game
         const sbPerGame = batter.games_played > 0 ? (batter.stolen_bases / batter.games_played) : 0;
         const speedVolume = Math.min(30, sbPerGame * 45); // Max 30 points for volume (approx 0.66 SB/game)
-        const speedPct = batter.stolen_base_percentage * 70; // Max 70 points for SB efficiency
+        const speedPct = (batter.stolen_base_percentage ?? 0) * 70; // Max 70 points for SB efficiency
         const speed = Math.min(100, speedVolume + speedPct);
 
         const scores = [contact, onBase, power, discipline, speed];
@@ -1942,9 +1942,9 @@ export function BattingAnalyticsView({
 
     // Compute lineup advice
     const getLineupAdvice = (batter: BattingStats) => {
-        const o = batter.on_base_percentage;
-        const s = batter.slugging_percentage;
-        const sb = batter.stolen_bases;
+        const o = batter.on_base_percentage ?? 0;
+        const s = batter.slugging_percentage ?? 0;
+        const sb = batter.stolen_bases ?? 0;
         
         if (o >= 0.450 && s >= 0.550) {
             return {
@@ -2027,8 +2027,8 @@ export function BattingAnalyticsView({
 
                     {/* Draw Batter Nodes */}
                     {sortedBattersForPlot.map(b => {
-                        const cx = getPlotX(b.on_base_percentage);
-                        const cy = getPlotY(b.slugging_percentage);
+                        const cx = getPlotX(b.on_base_percentage ?? 0);
+                        const cy = getPlotY(b.slugging_percentage ?? 0);
                         const isSelected = b.id === activeBatter.id;
                         const isHovered = b.id === hoveredBatterId;
 
@@ -2073,8 +2073,8 @@ export function BattingAnalyticsView({
                         (() => {
                             const hb = batters.find(b => b.id === hoveredBatterId);
                             if (!hb) return null;
-                            const tx = getPlotX(hb.on_base_percentage);
-                            const ty = getPlotY(hb.slugging_percentage);
+                            const tx = getPlotX(hb.on_base_percentage ?? 0);
+                            const ty = getPlotY(hb.slugging_percentage ?? 0);
                             const tooltipW = 120;
                             const tooltipH = 50;
                             
@@ -2093,8 +2093,8 @@ export function BattingAnalyticsView({
                                         filter="drop-shadow(0px 4px 6px rgba(0,0,0,0.3))" 
                                     />
                                     <text x="8" y="16" fill="var(--text-h)" fontSize="10px" fontWeight="bold">{hb.player_name}</text>
-                                    <text x="8" y="30" fill="var(--text)" fontSize="9px">OBP: {hb.on_base_percentage.toFixed(3)}</text>
-                                    <text x="8" y="42" fill="var(--text)" fontSize="9px">SLG: {hb.slugging_percentage.toFixed(3)}</text>
+                                    <text x="8" y="30" fill="var(--text)" fontSize="9px">OBP: {(hb.on_base_percentage ?? 0).toFixed(3)}</text>
+                                    <text x="8" y="42" fill="var(--text)" fontSize="9px">SLG: {(hb.slugging_percentage ?? 0).toFixed(3)}</text>
                                 </g>
                             );
                         })()
@@ -2131,7 +2131,7 @@ export function BattingAnalyticsView({
                         #{activeBatter.player_number} {activeBatter.player_name}
                     </h4>
                     <span style={{ fontSize: '11px', color: 'var(--text)', marginBottom: '12px' }}>
-                        PA: {activeBatter.plate_appearances} • AB: {activeBatter.at_bats} • OPS: {activeBatter.ops.toFixed(3)}
+                        PA: {activeBatter.plate_appearances} • AB: {activeBatter.at_bats} • OPS: {(activeBatter.ops ?? 0).toFixed(3)}
                     </span>
 
                     {/* Radar Chart Display */}
@@ -2202,13 +2202,13 @@ export function BattingAnalyticsView({
                     <div style={{ background: 'rgba(255, 255, 255, 0.01)', border: '1px solid var(--border)', borderRadius: '8px', padding: '12px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
                             <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text)' }}>On-Base Plus Slugging (OPS)</span>
-                            <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--accent)' }}>{activeBatter.ops.toFixed(3)}</span>
+                            <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--accent)' }}>{(activeBatter.ops ?? 0).toFixed(3)}</span>
                         </div>
                         <div style={{ height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', overflow: 'hidden', display: 'flex' }}>
                             <div 
                                 style={{ 
-                                    width: `${Math.min(100, (activeBatter.ops / 1.200) * 100)}%`, 
-                                    background: activeBatter.ops >= 0.950 ? 'linear-gradient(90deg, #10b981, #059669)' : (activeBatter.ops >= 0.800 ? '#3b82f6' : '#f59e0b'),
+                                    width: `${Math.min(100, ((activeBatter.ops ?? 0) / 1.200) * 100)}%`, 
+                                    background: (activeBatter.ops ?? 0) >= 0.950 ? 'linear-gradient(90deg, #10b981, #059669)' : ((activeBatter.ops ?? 0) >= 0.800 ? '#3b82f6' : '#f59e0b'),
                                     borderRadius: '3px',
                                     transition: 'width 0.3s ease-out'
                                 }} 
@@ -2227,15 +2227,15 @@ export function BattingAnalyticsView({
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                             <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text)' }}>Plate Eye (Walks vs. Strikeouts)</span>
                             <span style={{ fontSize: '11px', color: 'var(--text-h)' }}>
-                                {activeBatter.walks} BB / {activeBatter.strikeouts} SO ({(activeBatter.bb_k_ratio).toFixed(2)} Ratio)
+                                {activeBatter.walks} BB / {activeBatter.strikeouts} SO ({(activeBatter.bb_k_ratio ?? 0).toFixed(2)} Ratio)
                             </span>
                         </div>
                         <div style={{ display: 'flex', gap: '8px', fontSize: '10px', color: 'var(--text-secondary)' }}>
-                            <span>AVG: {activeBatter.batting_average.toFixed(3)}</span>
+                            <span>AVG: {(activeBatter.batting_average ?? 0).toFixed(3)}</span>
                             <span>•</span>
-                            <span>OBP: {activeBatter.on_base_percentage.toFixed(3)}</span>
+                            <span>OBP: {(activeBatter.on_base_percentage ?? 0).toFixed(3)}</span>
                             <span>•</span>
-                            <span>ISO: {activeBatter.isolated_power.toFixed(3)}</span>
+                            <span>ISO: {(activeBatter.isolated_power ?? 0).toFixed(3)}</span>
                         </div>
                     </div>
 
