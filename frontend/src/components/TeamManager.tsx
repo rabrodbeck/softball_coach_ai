@@ -555,8 +555,9 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                 // Helper for Batting search
                 const getBattingVal = (colNames: string[], defaultVal = 0) => {
                     const idx = battingHeaders.findIndex(h => colNames.includes(h));
-                    if (idx === -1 || !battingValues[idx]) return defaultVal;
-                    return parseInt(battingValues[idx].replace(/"/g, '')) || defaultVal;
+                    if (idx === -1 || !battingValues[idx] || battingValues[idx].trim() === '') return defaultVal;
+                    const parsed = parseInt(battingValues[idx].replace(/"/g, ''));
+                    return isNaN(parsed) ? defaultVal : parsed;
                 };
 
                 const getStr = (colNames: string[]) => {
@@ -568,23 +569,31 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                 // Helpers for Pitching search
                 const getPitchingVal = (colNames: string[], defaultVal = 0) => {
                     const idx = pitchingHeaders.findIndex(h => colNames.includes(h));
-                    if (idx === -1 || !pitchingValues[idx]) return defaultVal;
-                    return parseInt(pitchingValues[idx].replace(/"/g, '')) || defaultVal;
+                    if (idx === -1 || !pitchingValues[idx] || pitchingValues[idx].trim() === '') return defaultVal;
+                    const parsed = parseInt(pitchingValues[idx].replace(/"/g, ''));
+                    return isNaN(parsed) ? defaultVal : parsed;
                 };
 
                 const getPitchingValFloat = (colNames: string[], defaultVal = 0.0) => {
                     const idx = pitchingHeaders.findIndex(h => colNames.includes(h));
-                    if (idx === -1 || !pitchingValues[idx]) return defaultVal;
-                    return parseFloat(pitchingValues[idx].replace(/"/g, '')) || defaultVal;
+                    if (idx === -1 || !pitchingValues[idx] || pitchingValues[idx].trim() === '') return defaultVal;
+                    const parsed = parseFloat(pitchingValues[idx].replace(/"/g, ''));
+                    return isNaN(parsed) ? defaultVal : parsed;
                 };
 
-                        // Unified lookup helper checking both batting and pitching columns for new stats
+                // Unified lookup helper checking both batting and pitching columns for new stats
                 const getVal = (colNames: string[], defaultVal = 0) => {
                     let idx = battingHeaders.findIndex(h => colNames.includes(h));
-                    if (idx !== -1 && battingValues[idx]) return parseInt(battingValues[idx].replace(/"/g, '')) || defaultVal;
+                    if (idx !== -1 && battingValues[idx] && battingValues[idx].trim() !== '') {
+                        const parsed = parseInt(battingValues[idx].replace(/"/g, ''));
+                        return isNaN(parsed) ? defaultVal : parsed;
+                    }
                     
                     idx = pitchingHeaders.findIndex(h => colNames.includes(h));
-                    if (idx !== -1 && pitchingValues[idx]) return parseInt(pitchingValues[idx].replace(/"/g, '')) || defaultVal;
+                    if (idx !== -1 && pitchingValues[idx] && pitchingValues[idx].trim() !== '') {
+                        const parsed = parseInt(pitchingValues[idx].replace(/"/g, ''));
+                        return isNaN(parsed) ? defaultVal : parsed;
+                    }
                     return defaultVal;
                 };
 
@@ -596,19 +605,25 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                 const getCatcherVal = (colNames: string[], defaultVal = 0) => {
                     if (!hasCatchingSection) return defaultVal;
                     const idx = cleanHeaders.map(h => colNames.includes(h)).lastIndexOf(true);
-                    if (idx !== -1 && rawValues[idx]) return parseInt(rawValues[idx].replace(/"/g, '')) || defaultVal;
+                    if (idx !== -1 && rawValues[idx] && rawValues[idx].trim() !== '') {
+                        const parsed = parseInt(rawValues[idx].replace(/"/g, ''));
+                        return isNaN(parsed) ? defaultVal : parsed;
+                    }
                     return defaultVal;
                 };
 
                 const getCatcherValFloat = (colNames: string[], defaultVal = 0.0) => {
                     if (!hasCatchingSection) return defaultVal;
                     const idx = cleanHeaders.map(h => colNames.includes(h)).lastIndexOf(true);
-                    if (idx !== -1 && rawValues[idx]) return parseFloat(rawValues[idx].replace(/"/g, '')) || defaultVal;
+                    if (idx !== -1 && rawValues[idx] && rawValues[idx].trim() !== '') {
+                        const parsed = parseFloat(rawValues[idx].replace(/"/g, ''));
+                        return isNaN(parsed) ? defaultVal : parsed;
+                    }
                     return defaultVal;
                 };
 
                 // Search terms are normalized (no whitespace, uppercase)
-                const playerNum = getBattingVal(["#", "JERSEY", "JERSEY#", "JERSEYNUMBER", "NUMBER", "NO", "NO.", "PLAYERNUMBER", "NUM", "JERSEYNO", "JERSEYNO.", "PLAYERNO", "PLAYERNO.", "NUMBER#"]);
+                const playerNum = getBattingVal(["#", "JERSEY", "JERSEY#", "JERSEYNUMBER", "NUMBER", "NO", "NO.", "PLAYERNUMBER", "NUM", "JERSEYNO", "JERSEYNO.", "PLAYERNO", "PLAYERNO.", "NUMBER#"], -1);
                 
                 // Extract and combine first and last name, or fallback to full name/player column
                 const first = getStr(["FIRST", "FIRSTNAME", "PLAYER", "PLAYERNAME", "NAME"]);
@@ -616,16 +631,19 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                 const playerName = last ? `${first} ${last}` : first;
 
                 // If we have no jersey number and no name, skip the row
-                if (playerNum === 0 && !playerName) continue;
+                if (playerNum === -1 && !playerName) continue;
 
-                // Match with existing roster by Jersey Number ONLY
-                const existing = players.find(r => playerNum > 0 && r.player_number === playerNum);
+                // Match with existing roster by Jersey Number (if specified) or name
+                const existing = players.find(r => 
+                    (playerNum >= 0 && r.player_number === playerNum) ||
+                    (playerNum === -1 && playerName && r.player_name?.trim().toLowerCase() === playerName.trim().toLowerCase())
+                );
 
                 parsedPlayers.push({
                     matched: !!existing,
                     existing_id: existing?.id,
-                    player_name: existing?.player_name || playerName || `Player #${playerNum}`,
-                    player_number: existing?.player_number || playerNum,
+                    player_name: existing?.player_name || playerName || `Player #${playerNum >= 0 ? playerNum : ''}`,
+                    player_number: existing ? existing.player_number : (playerNum >= 0 ? playerNum : 0),
                     batting_hand: existing ? normalizeHand(existing.batting_hand, 'Right') : 'Right',
                     throwing_hand: existing ? normalizeHand(existing.throwing_hand, 'Right') : 'Right',
 

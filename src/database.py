@@ -617,7 +617,7 @@ def bulk_update_player_stats(team_id: int, updates: list):
             name = p.get("player_name", "").strip()
             
             # Find player row by jersey number (if specified) or name
-            if number > 0:
+            if number >= 0:
                 cursor.execute(
                     "SELECT id, games_played FROM players WHERE team_id = %s AND player_number = %s LIMIT 1;",
                     (team_id, number)
