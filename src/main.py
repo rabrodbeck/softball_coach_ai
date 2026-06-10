@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, EmailStr
 from src.retriever import build_chain, build_agent_executor
-from src.database import get_coach_by_email, authenticate_coach, register_coach, create_team, get_coach_teams, set_active_team, update_team, add_player, get_team_players, update_player_stats, delete_player, bulk_update_player_stats
+from src.database import get_coach_by_email, authenticate_coach, register_coach, create_team, get_coach_teams, set_active_team, update_team, add_player, get_team_players, update_player_stats, delete_player, bulk_update_player_stats, check_is_head_coach, add_coach_to_team
 
 app = FastAPI(title = "🥎 Softball Coach AI API")
 
@@ -73,6 +73,7 @@ class TeamUpdateRequest(BaseModel):
     innings_per_game: int = 7
 
 class PlayerRequest(BaseModel):
+    coach_id: int
     team_id: int
     player_name: str
     player_number: int
@@ -81,6 +82,7 @@ class PlayerRequest(BaseModel):
     parent_player_id: int | None = None
 
 class PlayerUpdateRequest(BaseModel):
+    coach_id: int
     player_name: str
     player_number: int
     batting_hand: str
@@ -189,7 +191,11 @@ class BulkImportPlayer(BaseModel):
 class BulkImportRequest(BaseModel):
     team_id: int
     players: list[BulkImportPlayer]
-
+ 
+class InviteCoachRequest(BaseModel):
+    coach_id: int
+    email: EmailStr
+    role: str
 
 
 # 2. Authentication API routes
@@ -321,15 +327,28 @@ def api_update_team(team_id: int, data: TeamUpdateRequest):
         return updated
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/teams/{team_id}/coaches")
+def api_invite_coach(team_id: int, data: InviteCoachRequest):
+    # Verify the requester is a Head Coach
+    if not check_is_head_coach(data.coach_id, team_id):
+        raise HTTPException(status_code=403, detail="Only a Head Coach can invite other coaches.")
     
+    result = add_coach_to_team(team_id, data.email, data.role)
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
 # 5. Player Management API Routes
 @app.post("/api/players")
 def api_add_player(data: PlayerRequest):
     try:
-        new_player = add_player(data.team_id, data.player_name, data.player_number, data.batting_hand, data.throwing_hand, data.parent_player_id)
+        new_player = add_player(data.coach_id, data.team_id, data.player_name, data.player_number, data.batting_hand, data.throwing_hand, data.parent_player_id)
         if not new_player:
             raise HTTPException(status_code=500, detail="Failed to create player.")
         return new_player
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
@@ -344,20 +363,24 @@ def api_get_roster(team_id: int):
 @app.put("/api/players/{player_id}")
 def api_update_player(player_id: int, data: PlayerUpdateRequest):
     try:
-        updated = update_player_stats(player_id, dict(data))
+        updated = update_player_stats(data.coach_id, player_id, dict(data))
         if not updated:
             raise HTTPException(status_code=404, detail="Player not found.")
         return updated
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
 @app.delete("/api/players/{player_id}")
-def api_delete_player(player_id: int):
+def api_delete_player(player_id: int, coach_id: int):
     try:
-        success = delete_player(player_id)
+        success = delete_player(coach_id, player_id)
         if not success:
             raise HTTPException(status_code=404, detail="Player not found.")
         return {"success": True}
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
@@ -400,4 +423,4 @@ def api_google_register(data: GoogleRegisterRequest):
 
 @app.get("/")
 def read_root():
-    return {"status": "ok", "app": "Softball Coach AI API"}
+    return {"status": "ok", "app": "Softball Coach AI API"}
