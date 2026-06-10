@@ -989,7 +989,7 @@ def get_coach_by_email(email: str):
 
 def check_is_head_coach(coach_id: int, team_id: int) -> bool:
     """Returns true if the coach is a head coach for the specified team."""
-    conn = get_db_connection
+    conn = get_db_connection()
     cursor = conn.cursor()
     try:
         cursor.execute(
