@@ -2467,8 +2467,8 @@ export function FieldingAnalyticsView({
     selectedFielderId: number | null;
     onSelectFielder: (id: number) => void;
 }) {
-    // Filter out players who have no total chances to focus purely on active fielders
-    const fielders: FieldingStats[] = players.filter(p => p.total_chances > 0);
+    // Filter out players who have no total chances and have not played in any games to focus purely on active fielders
+    const fielders: FieldingStats[] = players.filter(p => p.total_chances > 0 || p.games_played > 0);
     const [hoveredFielderId, setHoveredFielderId] = React.useState<number | null>(null);
 
     React.useEffect(() => {
@@ -2478,6 +2478,7 @@ export function FieldingAnalyticsView({
     }, [fielders, selectedFielderId]);
 
     const activeFielder = fielders.find(f => f.id === selectedFielderId) || fielders[0];
+    const activeFpct = activeFielder ? (activeFielder.total_chances > 0 ? (activeFielder.fielding_percentage ?? 0) : 1.0) : 1.0;
 
     if (fielders.length === 0) {
         return (
@@ -2495,7 +2496,7 @@ export function FieldingAnalyticsView({
     const chartH = plotH - marginB - 20;
 
     const tcArray = fielders.map(f => f.total_chances ?? 0);
-    const fpctArray = fielders.map(f => f.fielding_percentage ?? 0);
+    const fpctArray = fielders.map(f => f.total_chances > 0 ? (f.fielding_percentage ?? 0) : 1.0);
 
     const minX = Math.max(0, Math.min(5, ...tcArray) - 1);
     const maxX = Math.max(30, ...tcArray) + 3;
@@ -2543,7 +2544,8 @@ export function FieldingAnalyticsView({
 
     const getRadarPoints = (fielder: FieldingStats) => {
         // Normalizations matching youth fastpitch benchmarks (0 to 100)
-        const reliability = Math.min(100, Math.max(0, (((fielder.fielding_percentage ?? 0) - 0.700) / 0.300) * 100));
+        const fpct = fielder.total_chances > 0 ? (fielder.fielding_percentage ?? 0) : 1.0;
+        const reliability = Math.min(100, Math.max(0, (((fpct) - 0.700) / 0.300) * 100));
         
         // Range based on assists relative to team or standard (max 15 assists is 100)
         const range = Math.min(100, (((fielder.assists ?? 0) / 15) * 100));
@@ -2575,7 +2577,7 @@ export function FieldingAnalyticsView({
 
     // Compute lineup advice
     const getDefensiveAdvice = (fielder: FieldingStats) => {
-        const fpct = fielder.fielding_percentage ?? 0;
+        const fpct = fielder.total_chances > 0 ? (fielder.fielding_percentage ?? 0) : 1.0;
         const a = fielder.assists ?? 0;
         const po = fielder.putouts ?? 0;
         const tc = fielder.total_chances ?? 0;
@@ -2666,7 +2668,7 @@ export function FieldingAnalyticsView({
                     {/* Draw Fielder Nodes */}
                     {sortedFieldersForPlot.map(f => {
                         const cx = getPlotX(f.total_chances ?? 0);
-                        const cy = getPlotY(f.fielding_percentage ?? 0);
+                        const cy = getPlotY(f.total_chances > 0 ? (f.fielding_percentage ?? 0) : 1.0);
                         const isSelected = f.id === activeFielder.id;
                         const isHovered = f.id === hoveredFielderId;
 
@@ -2712,7 +2714,7 @@ export function FieldingAnalyticsView({
                             const hf = fielders.find(f => f.id === hoveredFielderId);
                             if (!hf) return null;
                             const tx = getPlotX(hf.total_chances ?? 0);
-                            const ty = getPlotY(hf.fielding_percentage ?? 0);
+                            const ty = getPlotY(hf.total_chances > 0 ? (hf.fielding_percentage ?? 0) : 1.0);
                             const tooltipW = 120;
                             const tooltipH = 50;
                             
@@ -2732,7 +2734,7 @@ export function FieldingAnalyticsView({
                                     />
                                     <text x="8" y="16" fill="var(--text-h)" fontSize="10px" fontWeight="bold">{hf.player_name}</text>
                                     <text x="8" y="30" fill="var(--text)" fontSize="9px">Chances (TC): {hf.total_chances}</text>
-                                    <text x="8" y="42" fill="var(--text)" fontSize="9px">Fielding %: {(hf.fielding_percentage ?? 0).toFixed(3)}</text>
+                                    <text x="8" y="42" fill="var(--text)" fontSize="9px">Fielding %: {hf.total_chances > 0 ? (hf.fielding_percentage ?? 0).toFixed(3) : 'N/A'}</text>
                                 </g>
                             );
                         })()
@@ -2772,118 +2774,145 @@ export function FieldingAnalyticsView({
                         TC: {activeFielder.total_chances ?? 0} • PO: {activeFielder.putouts ?? 0} • A: {activeFielder.assists ?? 0} • E: {activeFielder.errors ?? 0}
                     </span>
 
-                    {/* Radar Chart Display */}
-                    <svg viewBox="0 0 260 235" style={{ width: '100%', height: 'auto', maxWidth: '260px', overflow: 'visible' }}>
-                        {/* Background diamonds (4-axis background grids) */}
-                        {[25, 50, 75, 100].map((level) => {
-                            const points = Array.from({ length: 4 }).map((_, i) => {
+                    {activeFielder.total_chances > 0 ? (
+                        /* Radar Chart Display */
+                        <svg viewBox="0 0 260 235" style={{ width: '100%', height: 'auto', maxWidth: '260px', overflow: 'visible' }}>
+                            {/* Background diamonds (4-axis background grids) */}
+                            {[25, 50, 75, 100].map((level) => {
+                                const points = Array.from({ length: 4 }).map((_, i) => {
+                                    const angle = (Math.PI * 2 / 4) * i - Math.PI / 2;
+                                    const r = (level / 100) * radarRadius;
+                                    const x = radarCenter + r * Math.cos(angle);
+                                    const y = radarCenter + r * Math.sin(angle);
+                                    return `${x},${y}`;
+                                }).join(" ");
+                                return (
+                                    <polygon 
+                                        key={level} 
+                                        points={points} 
+                                        fill="none" 
+                                        stroke="var(--border)" 
+                                        strokeWidth="0.8" 
+                                        strokeDasharray={level === 100 ? "0" : "3,3"} 
+                                    />
+                                );
+                            })}
+
+                            {/* Axis lines and labels */}
+                            {axisLabels.map((label, i) => {
                                 const angle = (Math.PI * 2 / 4) * i - Math.PI / 2;
-                                const r = (level / 100) * radarRadius;
-                                const x = radarCenter + r * Math.cos(angle);
-                                const y = radarCenter + r * Math.sin(angle);
-                                return `${x},${y}`;
-                            }).join(" ");
-                            return (
-                                <polygon 
-                                    key={level} 
-                                    points={points} 
-                                    fill="none" 
-                                    stroke="var(--border)" 
-                                    strokeWidth="0.8" 
-                                    strokeDasharray={level === 100 ? "0" : "3,3"} 
-                                />
-                            );
-                        })}
+                                const xOuter = radarCenter + radarRadius * Math.cos(angle);
+                                const yOuter = radarCenter + radarRadius * Math.sin(angle);
+                                
+                                // Align text anchor dynamically based on position
+                                let anchor: "start" | "end" | "middle" = "middle";
+                                if (Math.cos(angle) > 0.1) anchor = "start";
+                                else if (Math.cos(angle) < -0.1) anchor = "end";
 
-                        {/* Axis lines and labels */}
-                        {axisLabels.map((label, i) => {
-                            const angle = (Math.PI * 2 / 4) * i - Math.PI / 2;
-                            const xOuter = radarCenter + radarRadius * Math.cos(angle);
-                            const yOuter = radarCenter + radarRadius * Math.sin(angle);
-                            
-                            // Align text anchor dynamically based on position
-                            let anchor: "start" | "end" | "middle" = "middle";
-                            if (Math.cos(angle) > 0.1) anchor = "start";
-                            else if (Math.cos(angle) < -0.1) anchor = "end";
+                                return (
+                                    <g key={label}>
+                                        <line x1={radarCenter} y1={radarCenter} x2={xOuter} y2={yOuter} stroke="var(--border)" strokeWidth="0.8" />
+                                        <text 
+                                            x={radarCenter + (radarRadius + 14) * Math.cos(angle)} 
+                                            y={radarCenter + (radarRadius + 14) * Math.sin(angle) + 4} 
+                                            textAnchor={anchor} 
+                                            fill="var(--text)" 
+                                            fontSize="9px" 
+                                            fontWeight="semibold"
+                                        >
+                                            {label}
+                                        </text>
+                                    </g>
+                                );
+                            })}
 
-                            return (
-                                <g key={label}>
-                                    <line x1={radarCenter} y1={radarCenter} x2={xOuter} y2={yOuter} stroke="var(--border)" strokeWidth="0.8" />
-                                    <text 
-                                        x={radarCenter + (radarRadius + 14) * Math.cos(angle)} 
-                                        y={radarCenter + (radarRadius + 14) * Math.sin(angle) + 4} 
-                                        textAnchor={anchor} 
-                                        fill="var(--text)" 
-                                        fontSize="9px" 
-                                        fontWeight="semibold"
-                                    >
-                                        {label}
-                                    </text>
-                                </g>
-                            );
-                        })}
-
-                        {/* Player data shape */}
-                        <polygon 
-                            points={getRadarPoints(activeFielder)} 
-                            fill="rgba(16, 185, 129, 0.2)" 
-                            stroke="var(--accent)" 
-                            strokeWidth="2.2" 
-                            style={{ transition: 'all 0.3s ease-in-out' }}
-                        />
-                    </svg>
-                </div>
-
-                {/* Glassmorphic KPI Details */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    {/* Fielding Percentage Progress Bar */}
-                    <div style={{ background: 'rgba(255, 255, 255, 0.01)', border: '1px solid var(--border)', borderRadius: '8px', padding: '12px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                            <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text)' }}>Fielding Percentage (FPCT)</span>
-                            <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--accent)' }}>{(activeFielder.fielding_percentage ?? 0).toFixed(3)}</span>
-                        </div>
-                        <div style={{ height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', overflow: 'hidden', display: 'flex' }}>
-                            <div 
-                                style={{ 
-                                    width: `${Math.min(100, (((activeFielder.fielding_percentage ?? 0) - 0.500) / 0.500) * 100)}%`, 
-                                    background: (activeFielder.fielding_percentage ?? 0) >= 0.950 ? 'linear-gradient(90deg, #10b981, #059669)' : ((activeFielder.fielding_percentage ?? 0) >= 0.880 ? '#3b82f6' : '#f59e0b'),
-                                    borderRadius: '3px',
-                                    transition: 'width 0.3s ease-out'
-                                }} 
+                            {/* Player data shape */}
+                            <polygon 
+                                points={getRadarPoints(activeFielder)} 
+                                fill="rgba(16, 185, 129, 0.2)" 
+                                stroke="var(--accent)" 
+                                strokeWidth="2.2" 
+                                style={{ transition: 'all 0.3s ease-in-out' }}
                             />
+                        </svg>
+                    ) : (
+                        <div style={{ 
+                            display: 'flex', 
+                            flexDirection: 'column', 
+                            alignItems: 'center', 
+                            justifyContent: 'center', 
+                            padding: '40px 16px', 
+                            textAlign: 'center',
+                            color: 'var(--text-secondary)',
+                            gap: '12px',
+                            background: 'rgba(255, 255, 255, 0.01)',
+                            border: '1px dashed var(--border)',
+                            borderRadius: '8px',
+                            width: '100%',
+                            marginTop: '12px',
+                            minHeight: '220px'
+                        }}>
+                            <span style={{ fontSize: '32px' }}>🥎</span>
+                            <h5 style={{ margin: 0, fontSize: '14px', color: 'var(--text-h)', fontWeight: 'bold' }}>No Fielding Chances</h5>
+                            <p style={{ margin: 0, fontSize: '11px', color: 'var(--text)', lineHeight: '1.4', maxWidth: '220px' }}>
+                                {activeFielder.player_name} has played in games but has not logged any defensive chances yet (TC: 0).
+                            </p>
                         </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                            <span>Developing (&lt; .850)</span>
-                            <span>.920 Solid</span>
-                            <span>.960 Great</span>
-                            <span>.980+ Elite</span>
-                        </div>
-                    </div>
-
-                    {/* Ball Security Detail */}
-                    <div style={{ background: 'rgba(255, 255, 255, 0.01)', border: '1px solid var(--border)', borderRadius: '8px', padding: '12px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                            <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text)' }}>Play Success Ratio</span>
-                            <span style={{ fontSize: '11px', color: 'var(--text-h)' }}>
-                                {(activeFielder.putouts ?? 0) + (activeFielder.assists ?? 0)} Made / {activeFielder.errors ?? 0} Errors
-                            </span>
-                        </div>
-                        <div style={{ display: 'flex', gap: '8px', fontSize: '10px', color: 'var(--text-secondary)' }}>
-                            <span>Putouts: {activeFielder.putouts ?? 0}</span>
-                            <span>•</span>
-                            <span>Assists: {activeFielder.assists ?? 0}</span>
-                            <span>•</span>
-                            <span>Total Chances: {activeFielder.total_chances ?? 0}</span>
-                        </div>
-                    </div>
-
-                    {/* AI Defensive Position Advisor Card */}
-                    <div style={{ background: 'var(--accent-bg)', border: '1px solid var(--accent)', borderRadius: '8px', padding: '12px', textAlign: 'left' }}>
-                        <span style={{ fontSize: '10px', color: 'var(--accent)', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em' }}>AI Defensive Advisor</span>
-                        <h5 style={{ margin: '2px 0 6px 0', fontSize: '13px', fontWeight: 'bold', color: 'var(--text-h)' }}>{advice.role}</h5>
-                        <p style={{ margin: 0, fontSize: '11px', color: 'var(--text)', lineHeight: '1.4' }}>{advice.desc}</p>
-                    </div>
+                    )}
                 </div>
+
+                {activeFielder.total_chances > 0 && (
+                    /* Glassmorphic KPI Details */
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {/* Fielding Percentage Progress Bar */}
+                        <div style={{ background: 'rgba(255, 255, 255, 0.01)', border: '1px solid var(--border)', borderRadius: '8px', padding: '12px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text)' }}>Fielding Percentage (FPCT)</span>
+                                <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--accent)' }}>{activeFpct.toFixed(3)}</span>
+                            </div>
+                            <div style={{ height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', overflow: 'hidden', display: 'flex' }}>
+                                <div 
+                                    style={{ 
+                                        width: `${Math.min(100, (((activeFpct) - 0.500) / 0.500) * 100)}%`, 
+                                        background: (activeFpct) >= 0.950 ? 'linear-gradient(90deg, #10b981, #059669)' : ((activeFpct) >= 0.880 ? '#3b82f6' : '#f59e0b'),
+                                        borderRadius: '3px',
+                                        transition: 'width 0.3s ease-out'
+                                    }} 
+                                />
+                            </div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                                <span>Developing (&lt; .850)</span>
+                                <span>.920 Solid</span>
+                                <span>.960 Great</span>
+                                <span>.980+ Elite</span>
+                            </div>
+                        </div>
+
+                        {/* Ball Security Detail */}
+                        <div style={{ background: 'rgba(255, 255, 255, 0.01)', border: '1px solid var(--border)', borderRadius: '8px', padding: '12px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                <span style={{ fontSize: '12px', fontWeight: 'bold', color: 'var(--text)' }}>Play Success Ratio</span>
+                                <span style={{ fontSize: '11px', color: 'var(--text-h)' }}>
+                                    {(activeFielder.putouts ?? 0) + (activeFielder.assists ?? 0)} Made / {activeFielder.errors ?? 0} Errors
+                                </span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px', fontSize: '10px', color: 'var(--text-secondary)' }}>
+                                <span>Putouts: {activeFielder.putouts ?? 0}</span>
+                                <span>•</span>
+                                <span>Assists: {activeFielder.assists ?? 0}</span>
+                                <span>•</span>
+                                <span>Total Chances: {activeFielder.total_chances ?? 0}</span>
+                            </div>
+                        </div>
+
+                        {/* AI Defensive Position Advisor Card */}
+                        <div style={{ background: 'var(--accent-bg)', border: '1px solid var(--accent)', borderRadius: '8px', padding: '12px', textAlign: 'left' }}>
+                            <span style={{ fontSize: '10px', color: 'var(--accent)', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.05em' }}>AI Defensive Advisor</span>
+                            <h5 style={{ margin: '2px 0 6px 0', fontSize: '13px', fontWeight: 'bold', color: 'var(--text-h)' }}>{advice.role}</h5>
+                            <p style={{ margin: 0, fontSize: '11px', color: 'var(--text)', lineHeight: '1.4' }}>{advice.desc}</p>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );
