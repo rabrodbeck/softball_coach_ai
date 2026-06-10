@@ -926,3 +926,49 @@ def get_coach_by_email(email: str):
     finally:
         cursor.close()
         conn.close()
+
+def check_is_head_coach(coach_id: int, team_id: int) -> bool:
+    """Returns true if the coach is a head coach for the specified team."""
+    conn = get_db_connection
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT role FROM team_coaches WHERE coach_id = %s and team_id = %s LIMIT 1;",
+            (coach_id, team_id)
+        )
+        row = cursor.fetchone()
+        return row is not None and row["role"] == "Head Coach"
+    finally:
+        cursor.close()
+        conn.close()
+    
+def add_coach_to_team(team_id: int, email: str, role: str) -> dict:
+    """Finds a coach by email and links thenm to the team with the specified role."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # 1. Resolve email to coach_id
+        cursor.execute("SELECT id, coach_name FROM coaches WHERE username = %s LIMIT 1;", (email.lower().strip(),))
+        coach_row = cursor.fetchone()
+        if not coach_row:
+            return {"success": False, "error": "No coach registered with that email address"}
+        
+        coach_id = coach_row["id"]
+
+        # 2. Insert link into team_coaches
+        cursor.execute(
+            """
+            INSERT INTO team_coaches (team_id, coach_id, role, is_active)
+            VALUES (%s, %s, %s, false)
+            ON CONFLICT (team_id, coach_id) DO UPDATE SET role = EXCLUDED.role;
+            """,
+            (team_id, coach_id, role)
+        )
+        conn.commit()
+        return { "success": True, "coach_name": coach_row["coach_name"]}
+    except Exception as e:
+        conn.rollback()
+        return {"success": False, "error": str(e)}
+    finally:
+        cursor.close()
+        conn.close()
