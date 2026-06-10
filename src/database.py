@@ -400,8 +400,11 @@ def calculate_derived_stats(player: dict):
     pitching_stats = calculate_derived_pitching_stats(result, result.get("innings_per_game", 7))
     return calculate_derived_defensive_stats(pitching_stats)
 
-def add_player(team_id: int, name: str, number: int, batting_hand: str, throwing_hand: str, parent_player_id: int = None):
+def add_player(coach_id: int, team_id: int, name: str, number: int, batting_hand: str, throwing_hand: str, parent_player_id: int = None):
     """Creates a new player on a team with corresponding empty stats rows."""
+    if not check_is_head_coach(coach_id, team_id):
+        raise PermissionError("Only a Head Coach can add players.")
+    
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -522,10 +525,20 @@ def get_team_players(team_id: int):
         cursor.close()
         conn.close()
 
-def update_player_stats(player_id: int, stats: dict):
+def update_player_stats(coach_id: int, player_id: int, stats: dict):
     """Updates core details in players and stats inside transaction."""
     conn = get_db_connection()
     cursor = conn.conn.cursor() if hasattr(conn, 'conn') else conn.cursor()
+
+    cursor.execute("SELECT team_id FROM players WHERE id = %s LIMIT 1;", (player_id,))
+    row = cursor.fetchone()
+    if not row:
+        return None
+    team_id = row["team_id"]
+
+    if not check_is_head_coach(coach_id, team_id):
+        raise PermissionError("Only a Head Coach can edit player stats.")
+    
     try:
         parent_id = stats.get("parent_player_id")
 
@@ -701,21 +714,33 @@ def update_player_stats(player_id: int, stats: dict):
         cursor.close()
         conn.close()
 
-def delete_player(player_id: int):
-    """Removes a player from the players table."""
+def delete_player(coach_id: int, player_id: int):
+    # Fetch team_id for this player
     conn = get_db_connection()
     cursor = conn.cursor()
+    cursor.execute("SELECT team_id FROM players WHERE id = %s LIMIT 1;", (player_id,))
+    row = cursor.fetchone()
+    if not row:
+        return False
+    team_id = row["team_id"]
+    
+    if not check_is_head_coach(coach_id, team_id):
+        raise PermissionError("Only a Head Coach can delete players.")
+        
     try:
         cursor.execute("DELETE FROM players WHERE id = %s RETURNING id;", (player_id,))
-        row = cursor.fetchone()
+        ret_row = cursor.fetchone()
         conn.commit()
-        return row is not None
+        return ret_row is not None
     finally:
         cursor.close()
         conn.close()
 
-def bulk_update_player_stats(team_id: int, updates: list):
+def bulk_update_player_stats(coach_id: int, team_id: int, updates: list):
     """Updates multiple players stats inside a split-table players structure."""
+    if not check_is_head_coach(coach_id, team_id):
+        raise PermissionError("Only a Head Coach can import bulk stats.")
+    
     conn = get_db_connection()
     cursor = conn.conn.cursor() if hasattr(conn, 'conn') else conn.cursor()
     try:
