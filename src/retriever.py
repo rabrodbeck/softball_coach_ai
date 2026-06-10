@@ -146,12 +146,18 @@ def build_agent_executor(coach_id: int, selected_team_id: int | None = None):
             if not matching_team:
                 return f"Error: You do not have permission to view stats for Team ID {team_id}."
             
+            # Read active role from query
+            coach_role = matching_team.get("role", "Head Coach")
             team_name = matching_team["team_name"]
             players = get_team_players(team_id)
             if not players:
                 return f"The team '{team_name}' has no players in the roster."
                 
-            output = [f"Roster and Statistics for the team '{team_name}':"]
+            output = [
+                f"Roster and Statistics for '{team_name}' (Your Role: {coach_role}):",
+                "NOTE: If your role is 'Assistant Coach', you have read-only access. You cannot perform operations like adding, editing, or deleting players.",
+                "---"
+            ]
             for p in players:
                 # Format batting stats
                 batting = (
@@ -252,6 +258,11 @@ def build_agent_executor(coach_id: int, selected_team_id: int | None = None):
         "   Before answering questions about who has played the most/least or which position has the most/least innings, "
         "calculate the total outs for each player/position to make sure you determine the correct minimum/maximum.\n"
         "4. Keep these position stats in mind when helping coaches analyze lineup options, position depth, and rotations.\n"
+        "\n5. ACCESS PERMISSIONS & USER ROLES:\n"
+        "   - Pay attention to the active coach's role in the roster output (Head Coach or Assistant Coach).\n"
+        "   - If they are an 'Assistant Coach' and ask you to perform a modification (e.g. 'delete Sarah', 'add a new player', 'update stats'), "
+        "     politely remind them that their account has Read-Only (Assistant Coach) privileges on this team. Explain that they can analyze data, "
+        "     run lineups, and search playbook strategies, but must contact the Head Coach to execute changes.\n"
     )
 
 

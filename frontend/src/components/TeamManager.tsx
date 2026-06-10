@@ -11,6 +11,7 @@ interface Team {
     is_active: boolean;
     age_group: string;
     innings_per_game: number;
+    role?: 'Head Coach' | 'Assistant Coach';
 }
 
 interface Player {
@@ -88,11 +89,22 @@ interface TeamManagerProps {
     onSelectTeam: (team: Team) => void;
 }
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 export default function TeamManager({ coachId, onClose, selectedTeamId, onSelectTeam }: TeamManagerProps) {
     const [activeTab, setActiveTab] = useState<'teams' | 'players'>('teams');
     const [teams, setTeams] = useState<Team[]>([]);
     const [players, setPlayers] = useState<Player[]>([]);
     const [loading, setLoading] = useState(false);
+
+    const activeTeam = teams.find(t => t.id === selectedTeamId);
+    const [userRole, setUserRole] = useState<'Head Coach' | 'Assistant Coach'>('Head Coach');
+
+    useEffect(() => {
+        if (activeTeam) {
+            setUserRole(activeTeam.role ?? 'Head Coach');
+        }
+    }, [activeTeam]);
     
     // Forms state toggles
     const [showAddForm, setShowAddForm] = useState(false);
@@ -201,8 +213,6 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
             return sortDirection === 'asc' ? aNum - bNum : bNum - aNum;
         });
     }, [players, sortField, sortDirection, subView]);
-
-    const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
     const fetchTeams = async () => {
         setLoading(true);
@@ -315,7 +325,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
             const response = await fetch(`${API_BASE}/api/players`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ team_id: selectedTeamId, player_name: playerName, player_number: playerNumber, batting_hand: battingHand, throwing_hand: throwingHand })
+                body: JSON.stringify({ coach_id: coachId, team_id: selectedTeamId, player_name: playerName, player_number: playerNumber, batting_hand: battingHand, throwing_hand: throwingHand })
             });
             if (response.ok) {
                 setPlayerName('');
@@ -384,6 +394,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
+                    coach_id: coachId,
                     player_name: playerName, player_number: playerNumber, batting_hand: battingHand, throwing_hand: throwingHand,
                     games_played: gp, plate_appearances: pa, at_bats: ab,
                     singles: singles, doubles: doubles, triples: triples, home_runs: hr,
@@ -425,7 +436,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
     const handleDeletePlayer = async (playerId: number) => {
         if (!window.confirm("Are you sure you want to remove this player from the team?")) return;
         try {
-            const response = await fetch(`${API_BASE}/api/players/${playerId}`, { method: "DELETE" });
+            const response = await fetch(`${API_BASE}/api/players/${playerId}?coach_id=${coachId}`, { method: "DELETE" });
             if (response.ok) {
                 fetchPlayers();
             }
@@ -738,6 +749,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
+                    coach_id: coachId,
                     team_id: selectedTeamId,
                     players: matchedUpdates
                 })
@@ -758,9 +770,22 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
         <div className="modal-overlay">
             <div className="team-manager-card" style={{ width: activeTab === 'players' ? (subView === 'batting' ? '1050px' : '1180px') : '550px', transition: 'width 0.2s ease-out' }}>
                 <div className="team-manager-header">
-                    <div className="title-area">
+                    <div className="title-area" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <Users className="icon-sidebar" />
                         <h2>Team Workspace Manager</h2>
+                        {selectedTeamId && (
+                            <span style={{ 
+                                fontSize: '11px', 
+                                padding: '2px 8px', 
+                                borderRadius: '12px', 
+                                fontWeight: 'bold',
+                                background: userRole === 'Head Coach' ? 'var(--accent-bg)' : 'rgba(148, 163, 184, 0.15)',
+                                color: userRole === 'Head Coach' ? 'var(--accent)' : 'var(--text)',
+                                border: '1px solid ' + (userRole === 'Head Coach' ? 'var(--accent)' : 'var(--border)')
+                            }}>
+                                {userRole}
+                            </span>
+                        )}
                     </div>
                     <button onClick={onClose} className="btn-close-modal"><X size={20} /></button>
                 </div>
@@ -811,29 +836,39 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                             </div>
                         </form>
                     ) : editingTeam ? (
-                        <form onSubmit={handleUpdateTeam} className="add-team-form">
-                            <h3>Edit Team Details</h3>
-                            <div className="input-group"><label>Team Name</label><input type="text" value={teamName} onChange={(e) => setTeamName(e.target.value)} required /></div>
-                            <div className="form-row-double" style={{ display: 'flex', gap: '12px' }}>
-                                <div className="input-group" style={{ flex: 1 }}><label>Season</label><input type="text" value={season} onChange={(e) => setSeason(e.target.value)} required /></div>
-                                <div className="input-group" style={{ flex: 1 }}><label>Age Group</label><select value={ageGroup} onChange={(e) => setAgeGroup(e.target.value)} style={{ padding: '12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)' }}><option value="8U Division">8U Division</option><option value="10U Division">10U Division</option><option value="12U Division">12U Division</option><option value="14U Division">14U Division</option></select></div>
-                            </div>
-                            <div className="stats-row" style={{ display: 'flex', gap: '12px' }}>
-                                <div className="input-group" style={{ flex: 1 }}><label style={{ color: '#22c55e' }}>Wins</label><input type="number" min="0" value={wins} onChange={(e) => setWins(parseInt(e.target.value) || 0)} required /></div>
-                                <div className="input-group" style={{ flex: 1 }}><label style={{ color: '#ef4444' }}>Losses</label><input type="number" min="0" value={losses} onChange={(e) => setLosses(parseInt(e.target.value) || 0)} required /></div>
-                                <div className="input-group" style={{ flex: 1 }}><label style={{ color: '#94a3b8' }}>Ties</label><input type="number" min="0" value={ties} onChange={(e) => setTies(parseInt(e.target.value) || 0)} required /></div>
-                            </div>
-                            <div className="input-group">
-                                <label>Innings Per Game (Game Length)</label>
-                                <select value={inningsPerGame} onChange={(e) => setInningsPerGame(parseInt(e.target.value) || 7)} style={{ padding: '12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)' }}>
-                                    <option value="5">5 Innings</option>
-                                    <option value="6">6 Innings</option>
-                                    <option value="7">7 Innings</option>
-                                </select>
-                            </div>
-                            <div className="active-checkbox-group" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}><input type="checkbox" id="active-checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer' }} /><label htmlFor="active-checkbox" style={{ fontSize: '14px', cursor: 'pointer', fontWeight: 'bold' }}>Active Team this Season</label></div>
-                            <div className="form-actions" style={{ display: 'flex', gap: '12px', marginTop: '12px' }}><button type="submit" className="btn-primary" style={{ flex: 1 }}>Save Changes</button><button type="button" onClick={cancelForms} className="btn-secondary" style={{ flex: 1 }}>Cancel</button></div>
-                        </form>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                            <form onSubmit={handleUpdateTeam} className="add-team-form" style={{ marginBottom: 0 }}>
+                                <h3>Edit Team Details</h3>
+                                <div className="input-group"><label>Team Name</label><input type="text" value={teamName} onChange={(e) => setTeamName(e.target.value)} required /></div>
+                                <div className="form-row-double" style={{ display: 'flex', gap: '12px' }}>
+                                    <div className="input-group" style={{ flex: 1 }}><label>Season</label><input type="text" value={season} onChange={(e) => setSeason(e.target.value)} required /></div>
+                                    <div className="input-group" style={{ flex: 1 }}><label>Age Group</label><select value={ageGroup} onChange={(e) => setAgeGroup(e.target.value)} style={{ padding: '12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)' }}><option value="8U Division">8U Division</option><option value="10U Division">10U Division</option><option value="12U Division">12U Division</option><option value="14U Division">14U Division</option></select></div>
+                                </div>
+                                <div className="stats-row" style={{ display: 'flex', gap: '12px' }}>
+                                    <div className="input-group" style={{ flex: 1 }}><label style={{ color: '#22c55e' }}>Wins</label><input type="number" min="0" value={wins} onChange={(e) => setWins(parseInt(e.target.value) || 0)} required /></div>
+                                    <div className="input-group" style={{ flex: 1 }}><label style={{ color: '#ef4444' }}>Losses</label><input type="number" min="0" value={losses} onChange={(e) => setLosses(parseInt(e.target.value) || 0)} required /></div>
+                                    <div className="input-group" style={{ flex: 1 }}><label style={{ color: '#94a3b8' }}>Ties</label><input type="number" min="0" value={ties} onChange={(e) => setTies(parseInt(e.target.value) || 0)} required /></div>
+                                </div>
+                                <div className="input-group">
+                                    <label>Innings Per Game (Game Length)</label>
+                                    <select value={inningsPerGame} onChange={(e) => setInningsPerGame(parseInt(e.target.value) || 7)} style={{ padding: '12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)' }}>
+                                        <option value="5">5 Innings</option>
+                                        <option value="6">6 Innings</option>
+                                        <option value="7">7 Innings</option>
+                                    </select>
+                                </div>
+                                <div className="active-checkbox-group" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}><input type="checkbox" id="active-checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} style={{ width: '18px', height: '18px', cursor: 'pointer' }} /><label htmlFor="active-checkbox" style={{ fontSize: '14px', cursor: 'pointer', fontWeight: 'bold' }}>Active Team this Season</label></div>
+                                <div className="form-actions" style={{ display: 'flex', gap: '12px' }}><button type="submit" className="btn-primary" style={{ flex: 1 }}>Save Changes</button><button type="button" onClick={cancelForms} className="btn-secondary" style={{ flex: 1 }}>Cancel</button></div>
+                            </form>
+
+                            <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '0' }} />
+
+                            <InviteCoachForm 
+                                teamId={editingTeam.id} 
+                                coachId={coachId} 
+                                onInviteSuccess={fetchTeams} 
+                            />
+                        </div>
                     ) : (
                         <div className="teams-list-area">
                             <div className="list-subheader" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
@@ -846,7 +881,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                 {teams.filter(t => t.is_active).map((t) => (
                                     <div key={t.id} onClick={() => onSelectTeam(t)} className={`team-card ${t.id === selectedTeamId ? 'active' : ''}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', borderRadius: '8px', border: t.id === selectedTeamId ? '2px solid var(--accent)' : '1px solid var(--border)', background: t.id === selectedTeamId ? 'var(--accent-bg)' : 'var(--bg)', cursor: 'pointer' }}>
                                         <div className="team-card-info" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}><Trophy style={{ color: t.id === selectedTeamId ? 'var(--accent)' : 'var(--text)' }} size={20} /><div><h4 style={{ margin: 0, color: 'var(--text-h)', fontWeight: '600' }}>{t.team_name}</h4><span style={{ fontSize: '12px', color: 'var(--text)' }}>{t.season} • {t.age_group}</span></div></div>
-                                        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}><div className="team-stats" style={{ display: 'flex', gap: '8px', fontSize: '13px', fontWeight: 'bold' }}><span style={{ color: '#22c55e' }}>{t.wins}W</span><span style={{ color: '#ef4444' }}>{t.losses}L</span><span style={{ color: '#94a3b8' }}>{t.ties}T</span></div><button onClick={(e) => startEditingTeam(t, e)} className="btn-edit-team-pencil" style={{ background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer', padding: '4px', borderRadius: '4px' }}><Pencil size={15} /></button></div>
+                                        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}><div className="team-stats" style={{ display: 'flex', gap: '8px', fontSize: '13px', fontWeight: 'bold' }}><span style={{ color: '#22c55e' }}>{t.wins}W</span><span style={{ color: '#ef4444' }}>{t.losses}L</span><span style={{ color: '#94a3b8' }}>{t.ties}T</span></div>{(t.role === 'Head Coach' || !t.role) && <button onClick={(e) => startEditingTeam(t, e)} className="btn-edit-team-pencil" style={{ background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer', padding: '4px', borderRadius: '4px' }}><Pencil size={15} /></button>}</div>
                                     </div>
                                 ))}
                                 
@@ -857,7 +892,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                         {teams.filter(t => !t.is_active).map((t) => (
                                             <div key={t.id} onClick={() => onSelectTeam(t)} className={`team-card inactive ${t.id === selectedTeamId ? 'active' : ''}`} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderRadius: '8px', border: t.id === selectedTeamId ? '2px solid var(--accent)' : '1px solid var(--border)', background: t.id === selectedTeamId ? 'var(--accent-bg)' : 'rgba(0,0,0,0.1)', opacity: t.id === selectedTeamId ? 1 : 0.6, cursor: 'pointer' }}>
                                                 <div className="team-card-info" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}><Users style={{ color: t.id === selectedTeamId ? 'var(--accent)' : 'var(--text)' }} size={20} /><div><h4 style={{ margin: 0, color: 'var(--text-h)', fontWeight: t.id === selectedTeamId ? '600' : '500' }}>{t.team_name}</h4><span style={{ fontSize: '11px', color: 'var(--text)' }}>{t.season} • {t.age_group}</span></div></div>
-                                                <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}><div className="team-stats" style={{ display: 'flex', gap: '8px', fontSize: '12px', fontWeight: t.id === selectedTeamId ? 'bold' : 'normal' }}><span style={{ color: t.id === selectedTeamId ? '#22c55e' : 'inherit' }}>{t.wins}W</span><span style={{ color: t.id === selectedTeamId ? '#ef4444' : 'inherit' }}>{t.losses}L</span><span style={{ color: t.id === selectedTeamId ? '#94a3b8' : 'inherit' }}>{t.ties}T</span></div><button onClick={(e) => startEditingTeam(t, e)} className="btn-edit-team-pencil" style={{ background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer', padding: '4px', borderRadius: '4px' }}><Pencil size={15} /></button></div>
+                                                <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}><div className="team-stats" style={{ display: 'flex', gap: '8px', fontSize: '12px', fontWeight: t.id === selectedTeamId ? 'bold' : 'normal' }}><span style={{ color: t.id === selectedTeamId ? '#22c55e' : 'inherit' }}>{t.wins}W</span><span style={{ color: t.id === selectedTeamId ? '#ef4444' : 'inherit' }}>{t.losses}L</span><span style={{ color: t.id === selectedTeamId ? '#94a3b8' : 'inherit' }}>{t.ties}T</span></div>{(t.role === 'Head Coach' || !t.role) && <button onClick={(e) => startEditingTeam(t, e)} className="btn-edit-team-pencil" style={{ background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer', padding: '4px', borderRadius: '4px' }}><Pencil size={15} /></button>}</div>
                                             </div>
                                         ))}
                                     </>
@@ -1128,13 +1163,31 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                     </div>
                                 </div>
                                 <div style={{ display: 'flex', gap: '8px' }}>
-                                    <label className="btn-guest" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer', padding: '8px 12px' }}>
-                                        <Plus size={14} /> Import GC Stats
-                                        <input type="file" accept=".csv" onChange={handleFileImport} style={{ display: 'none' }} />
-                                    </label>
-                                    <button onClick={() => setShowAddPlayerForm(true)} className="btn-add-team">
-                                        <Plus size={16} /> Add Player
-                                    </button>
+                                    {userRole !== 'Head Coach' ? (
+                                        <div style={{ 
+                                            padding: '8px 12px', 
+                                            background: 'rgba(148, 163, 184, 0.1)', 
+                                            border: '1px solid var(--border)', 
+                                            borderRadius: '6px', 
+                                            fontSize: '13px', 
+                                            color: 'var(--text)',
+                                            fontWeight: 'bold',
+                                            display: 'flex',
+                                            alignItems: 'center'
+                                        }}>
+                                            🔒 Read-Only Mode (Assistant Coach)
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <label className="btn-guest" style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', cursor: 'pointer', padding: '8px 12px' }}>
+                                                <Plus size={14} /> Import GC Stats
+                                                <input type="file" accept=".csv" onChange={handleFileImport} style={{ display: 'none' }} />
+                                            </label>
+                                            <button onClick={() => setShowAddPlayerForm(true)} className="btn-add-team">
+                                                <Plus size={16} /> Add Player
+                                            </button>
+                                        </>
+                                    )}
                                 </div>
                             </div>
 
@@ -1307,7 +1360,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                                         </th>
                                                     </>
                                                 )}
-                                                <th style={{ padding: '10px 12px', textAlign: 'center', userSelect: 'none' }}>Actions</th>
+                                                {userRole === 'Head Coach' && <th style={{ padding: '10px 12px', textAlign: 'center', userSelect: 'none' }}>Actions</th>}
                                             </tr>
                                         </thead>
                                         <tbody>
@@ -1378,14 +1431,16 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                                             </td>
                                                         </>
                                                     )}
-                                                    <td style={{ padding: '10px 12px', display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
-                                                        <button onClick={() => startEditingPlayer(p)} className="btn-edit-team-pencil" style={{ background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer', padding: '4px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center' }}>
-                                                            <Pencil size={14} />
-                                                        </button>
-                                                        <button onClick={() => handleDeletePlayer(p.id)} className="btn-delete-player" style={{ background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer', padding: '4px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center' }}>
-                                                            <Trash2 size={14} style={{ color: '#ef4444' }} />
-                                                        </button>
-                                                    </td>
+                                                    {userRole === 'Head Coach' && (
+                                                        <td style={{ padding: '10px 12px', display: 'flex', gap: '8px', justifyContent: 'center', alignItems: 'center' }}>
+                                                            <button onClick={() => startEditingPlayer(p)} className="btn-edit-team-pencil" style={{ background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer', padding: '4px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center' }}>
+                                                                <Pencil size={14} />
+                                                            </button>
+                                                            <button onClick={() => handleDeletePlayer(p.id)} className="btn-delete-player" style={{ background: 'transparent', border: 'none', color: 'var(--text)', cursor: 'pointer', padding: '4px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center' }}>
+                                                                <Trash2 size={14} style={{ color: '#ef4444' }} />
+                                                            </button>
+                                                        </td>
+                                                    )}
                                                 </tr>
                                             ))}
                                         </tbody>
@@ -1456,6 +1511,71 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                 )}
             </div>
         </div>
+    );
+}
+
+function InviteCoachForm({ teamId, coachId, onInviteSuccess }: { teamId: number; coachId: number; onInviteSuccess: () => void }) {
+    const [email, setEmail] = useState('');
+    const [role, setRole] = useState<'Head Coach' | 'Assistant Coach'>('Assistant Coach');
+    const [loading, setLoading] = useState(false);
+    const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+        setMessage(null);
+        try {
+            const res = await fetch(`${API_BASE}/api/teams/${teamId}/coaches`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ coach_id: coachId, email, role })
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || 'Invitation failed.');
+            setMessage({ type: 'success', text: `Success! Added ${data.coach_name} to the team.` });
+            setEmail('');
+            onInviteSuccess();
+        } catch (err: any) {
+            setMessage({ type: 'error', text: err.message });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '12px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border)', borderRadius: '8px' }}>
+            <h4 style={{ margin: 0, fontSize: '13px', color: 'var(--text-h)', textAlign: 'left' }}>Invite Coach / Link Account</h4>
+            <div style={{ display: 'flex', gap: '8px' }}>
+                <input 
+                    type="email" 
+                    placeholder="Coach's registered email" 
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    style={{ flex: 1, padding: '6px 8px', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--card-bg)', color: 'var(--text-h)', fontSize: '12px' }}
+                />
+                <select 
+                    value={role} 
+                    onChange={(e) => setRole(e.target.value as any)}
+                    style={{ padding: '6px 8px', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--card-bg)', color: 'var(--text-h)', fontSize: '12px' }}
+                >
+                    <option value="Assistant Coach">Assistant (Read-Only)</option>
+                    <option value="Head Coach">Head Coach (Full Access)</option>
+                </select>
+                <button 
+                    type="submit" 
+                    disabled={loading}
+                    style={{ padding: '6px 12px', background: 'var(--accent)', color: 'var(--accent-text)', border: 'none', borderRadius: '4px', fontWeight: 'bold', fontSize: '12px', cursor: 'pointer' }}
+                >
+                    {loading ? 'Adding...' : 'Add'}
+                </button>
+            </div>
+            {message && (
+                <div style={{ fontSize: '11px', color: message.type === 'success' ? '#22c55e' : '#ef4444', textAlign: 'left' }}>
+                    {message.text}
+                </div>
+            )}
+        </form>
     );
 }
 

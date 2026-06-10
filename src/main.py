@@ -189,6 +189,7 @@ class BulkImportPlayer(BaseModel):
     innings_rf: float = 0.0
 
 class BulkImportRequest(BaseModel):
+    coach_id: int
     team_id: int
     players: list[BulkImportPlayer]
  
@@ -388,8 +389,10 @@ def api_delete_player(player_id: int, coach_id: int):
 def api_bulk_update_players(data: BulkImportRequest):
     try:
         player_data = [dict(p) for p in data.players]
-        updated = bulk_update_player_stats(data.team_id, player_data)
+        updated = bulk_update_player_stats(data.coach_id, data.team_id, player_data)
         return updated
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
