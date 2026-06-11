@@ -1,6 +1,7 @@
 :root {
   /* --- ACTIVE BRAND THEME: OPTIC FASTPITCH SPORTS THEME --- */
   --text: #4a5568;             /* Deep slate body text */
+  --text-secondary: #718096;   /* Muted secondary body text */
   --text-h: #0f172a;           /* Dark slate headers */
   --bg: #ffffff;               /* Squeaky clean white background */
   --border: #e2e8f0;           /* Soft border grey */
@@ -31,6 +32,7 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --text: #94a3b8;             /* Sleek slate grey body text */
+    --text-secondary: #64748b;   /* Muted secondary body text */
     --text-h: #f8fafc;           /* Bright white headers */
     --bg: #0b0f17;               /* Deep stadium night sky black/navy */
     --border: #1e293b;           /* Slate border */
