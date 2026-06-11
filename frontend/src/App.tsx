@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import AuthPortal from './components/AuthPortal';
 import SideBar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
-import TeamManager from './components/TeamManager';
+import TeamManager from './components/TeamManager/index';
 import { Trophy, Menu, Users } from 'lucide-react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './firebase';

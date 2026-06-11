@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Users, X, Trophy, Pencil, Trash2, TrendingUp, Map } from 'lucide-react';
 
 // Shared type-only imports and local helpers
-import { Team, Player, TeamManagerProps } from './types';
+import type { Team, Player, TeamManagerProps } from './types';
 
 
 // Modular Forms and Views
