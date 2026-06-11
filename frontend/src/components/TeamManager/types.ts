@@ -8,6 +8,7 @@ export interface Team {
     is_active: boolean;
     innings_per_game: number;
     role?: 'Head Coach' | 'Assistant Coach';
+    age_group: string;
 }
 
 export interface Player {
