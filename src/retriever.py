@@ -16,7 +16,7 @@ from langchain_core.prompts import PromptTemplate
 from langchain_core.tools import tool
 from langchain_classic.agents import AgentExecutor, create_tool_calling_agent
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from src.database import get_coach_teams, get_team_players
+from src.database import get_coach_teams, get_team_players, get_system_prompt
 
 # Dynamically calculate absolute pathing for the vectorstore folder
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -234,35 +234,37 @@ def build_agent_executor(coach_id: int, selected_team_id: int | None = None):
         api_key=api_key
     )
 
-    system_prompt = (
-        "You are an experienced fastpitch softball coach advising a youth coach.\n"
-        "Use the tools at your disposal to fetch real-time player statistics, rosters, "
-        "and drill manuals to answer the user's questions.\n"
-        f"You are directly advising Coach ID {coach_id}.\n"
-    )
-    if selected_team_id:
-        system_prompt += f"The coach's active/selected team ID is {selected_team_id}.\n"
+    # Original fallback content if the database query is unavailable
+    FALLBACK_SYSTEM_PROMPT = """You are an experienced fastpitch softball coach advising a youth coach.
+Use the tools at your disposal to fetch real-time player statistics, rosters, and drill manuals to answer the user's questions.
+You are directly advising Coach ID {{coach_id}}.
+{{active_team_context}}
 
-    system_prompt += (
-        "\nIMPORTANT STATISTICAL NOTES FOR THE AI AGENT:\n"
-        "1. In player rosters and stats returned by tools, the 'PositionInnings' section lists innings played by each player at "
-        "specific positions: P (Pitcher), C (Catcher), 1B (First Base), 2B (Second Base), 3B (Third Base), "
-        "SS (Shortstop), LF (Left Field), CF (Center Field), and RF (Right Field).\n"
-        "2. These innings follow standard baseball/softball fractional notation: the integer part represents "
-        "full innings, and the decimal part represents partial outs (e.g., .1 means 1 out, .2 means 2 outs).\n"
-        "3. To compare two innings values accurately, convert them to total outs:\n"
-        "   - Multiply the integer (whole) number of innings by 3.\n"
-        "   - Add the decimal value (e.g., .1 adds 1, .2 adds 2, .0 adds 0).\n"
-        "   - Example: 9.1 is 9 * 3 + 1 = 28 outs. 9.0 is 9 * 3 + 0 = 27 outs. Therefore, 9.1 is greater than 9.0.\n"
-        "   - Example: 2.1 is 2 * 3 + 1 = 7 outs. 2.2 is 2 * 3 + 2 = 8 outs. Therefore, 2.1 is less than 2.2.\n"
-        "   Before answering questions about who has played the most/least or which position has the most/least innings, "
-        "calculate the total outs for each player/position to make sure you determine the correct minimum/maximum.\n"
-        "4. Keep these position stats in mind when helping coaches analyze lineup options, position depth, and rotations.\n"
-        "\n5. ACCESS PERMISSIONS & USER ROLES:\n"
-        "   - Pay attention to the active coach's role in the roster output (Head Coach or Assistant Coach).\n"
-        "   - If they are an 'Assistant Coach' and ask you to perform a modification (e.g. 'delete Sarah', 'add a new player', 'update stats'), "
-        "     politely remind them that their account has Read-Only (Assistant Coach) privileges on this team. Explain that they can analyze data, "
-        "     run lineups, and search playbook strategies, but must contact the Head Coach to execute changes.\n"
+IMPORTANT STATISTICAL NOTES FOR THE AI AGENT:
+1. In player rosters and stats returned by tools, the 'PositionInnings' section lists innings played by each player at specific positions: P (Pitcher), C (Catcher), 1B (First Base), 2B (Second Base), 3B (Third Base), SS (Shortstop), LF (Left Field), CF (Center Field), and RF (Right Field).
+2. These innings follow standard baseball/softball fractional notation: the integer part represents full innings, and the decimal part represents partial outs (e.g., .1 means 1 out, .2 means 2 outs).
+3. To compare two innings values accurately, convert them to total outs:
+   - Multiply the integer (whole) number of innings by 3.
+   - Add the decimal value (e.g., .1 adds 1, .2 adds 2, .0 adds 0).
+   - Example: 9.1 is 9 * 3 + 1 = 28 outs. 9.0 is 9 * 3 + 0 = 27 outs. Therefore, 9.1 is greater than 9.0.
+   - Example: 2.1 is 2 * 3 + 1 = 7 outs. 2.2 is 2 * 3 + 2 = 8 outs. Therefore, 2.1 is less than 2.2.
+   Before answering questions about who has played the most/least or which position has the most/least innings, calculate the total outs for each player/position to make sure you determine the correct minimum/maximum.
+4. Keep these position stats in mind when helping coaches analyze lineup options, position depth, and rotations.
+
+5. ACCESS PERMISSIONS & USER ROLES:
+   - Pay attention to the active coach's role in the roster output (Head Coach or Assistant Coach).
+   - If they are an 'Assistant Coach' and ask you to perform a modification (e.g. 'delete Sarah', 'add a new player', 'update stats'), politely remind them that their account has Read-Only (Assistant Coach) privileges on this team. Explain that they can analyze data, run lineups, and search playbook strategies, but must contact the Head Coach to execute changes."""
+
+    # 1. Fetch prompt template dynamically
+    raw_prompt = get_system_prompt("agent_system_prompt", FALLBACK_SYSTEM_PROMPT)
+
+    # 2. Build active team context line
+    active_team_context = f"The coach's active/selected team ID is {selected_team_id}." if selected_team_id else ""
+
+    # 3. Format placeholders at runtime
+    system_prompt = raw_prompt.format(
+        coach_id=coach_id,
+        active_team_context=active_team_context
     )
 
 
