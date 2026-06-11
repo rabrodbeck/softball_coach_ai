@@ -72,7 +72,7 @@ def init_db():
     cursor = conn.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS coaches (
-                   id INTEGER PRIMARY KEY AUTOINCREMENT,
+                   id SERIAL PRIMARY KEY,
                    username TEXT UNIQUE NOT NULL,
                    password_hash TEXT NOT NULL,
                    coach_name TEXT NOT NULL,
