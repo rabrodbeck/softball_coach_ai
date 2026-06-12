@@ -3,6 +3,7 @@ import { Key, Mail, User, MapPin, Trophy, ShieldAlert, CheckCircle } from 'lucid
 import type { CoachProfile } from '../App';
 import { auth, googleProvider } from '../firebase';
 import { signInWithPopup } from 'firebase/auth';
+import { apiFetch } from '../utils/api';
 
 interface AuthPortalProps {
     onLoginSuccess: (profile: CoachProfile) => void;
@@ -23,7 +24,6 @@ export default function AuthPortal({ onLoginSuccess, onContinueAsGuest }: AuthPo
     const [loading, setLoading] = useState(false);
 
     // Set the base URL of the FastAPI backend (running locally or in the cloud)
-    const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
     const handleGoogleSignIn = async () => {
         setError(null);
@@ -38,9 +38,8 @@ export default function AuthPortal({ onLoginSuccess, onContinueAsGuest }: AuthPo
             }
 
             // Call backend check endpoint
-            const response = await fetch(`${API_BASE}/api/auth/google-login`, {
+            const response = await apiFetch(`/api/auth/google-login`, {
                 method: 'POST',
-                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email: userEmail, display_name: userDisplayName }),
             });
 
@@ -75,9 +74,8 @@ export default function AuthPortal({ onLoginSuccess, onContinueAsGuest }: AuthPo
         setLoading(true);
 
         try {
-            const response = await fetch(`${API_BASE}/api/auth/google-register`, {
+            const response = await apiFetch(`/api/auth/google-register`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     email,
                     coach_name: coachName,
@@ -110,9 +108,8 @@ export default function AuthPortal({ onLoginSuccess, onContinueAsGuest }: AuthPo
         setLoading(true);
 
         try {
-            const response = await fetch(`${API_BASE}/api/auth/login`, {
+            const response = await apiFetch(`/api/auth/login`, {
                 method: 'POST',
-                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ username: email, password }),
             });
 
@@ -142,9 +139,8 @@ export default function AuthPortal({ onLoginSuccess, onContinueAsGuest }: AuthPo
         setLoading(true);
 
         try {
-            const response = await fetch(`${API_BASE}/api/auth/register`, {
+            const response = await apiFetch(`/api/auth/register`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     username: email,
                     password,

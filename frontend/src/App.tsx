@@ -6,6 +6,7 @@ import TeamManager from './components/TeamManager/index';
 import { Trophy, Menu, Users } from 'lucide-react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './firebase';
+import { apiFetch } from './utils/api';
 
 export interface CoachProfile {
   id: number;
@@ -46,13 +47,11 @@ function App() {
 
   // Handle Firebase session persistence auto-login
   useEffect(() => {
-    const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser && firebaseUser.email) {
         try {
-          const res = await fetch(`${API_BASE}/api/auth/google-login`, {
+          const res = await apiFetch(`/api/auth/google-login`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               email: firebaseUser.email,
               display_name: firebaseUser.displayName || ""

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Send, BookOpen } from 'lucide-react';
+import { apiFetch } from '../utils/api';
 import type { CoachProfile } from '../App';
 
 interface ChatAreaProps {
@@ -20,7 +21,7 @@ export default function ChatArea({ userProfile, selectedTeamId }: ChatAreaProps)
     const [activeSources, setActiveSources] = useState<number | null>(null);
     const messageEndRef = useRef<HTMLDivElement | null>(null);
 
-    const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 
     const scrollToBottom = () => {
         messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -50,9 +51,8 @@ export default function ChatArea({ userProfile, selectedTeamId }: ChatAreaProps)
         setGenerating(true);
 
         try {
-            const response = await fetch(`${API_BASE}/api/chat`, {
+            const response = await apiFetch(`/api/chat`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     question: questionText,
                     age_group: customDivision || userProfile?.age_group || "8U Division",

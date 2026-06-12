@@ -3,7 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, EmailStr
 from src.retriever import build_chain, build_agent_executor
-from src.database import get_coach_by_email, authenticate_coach, register_coach, create_team, get_coach_teams, set_active_team, update_team, add_player, get_team_players, update_player_stats, delete_player, bulk_update_player_stats, check_is_head_coach, add_coach_to_team
+from src.database import get_coach_by_email, authenticate_coach, register_coach, create_team, get_coach_teams, set_active_team, update_team, add_player, get_team_players, update_player_stats, delete_player, bulk_update_player_stats, check_is_head_coach, add_coach_to_team, get_db_connection
+from src.auth import get_current_coach, verify_team_ownership
 
 app = FastAPI(title = "🥎 Softball Coach AI API")
 
@@ -247,59 +248,70 @@ def api_google_register(data: GoogleRegisterRequest):
 chain = build_chain()
 
 @app.post("/api/chat")
-def api_chat(data: ChatRequest):
+def api_chat(data: ChatRequest, current_coach: dict = Depends(get_current_coach)):
+    # Enforce request coach_id matches authenticated coach ID
+    request_coach_id = data.coach_id if data.coach_id is not None else current_coach["id"]
+    if request_coach_id != current_coach["id"]:
+        raise HTTPException(status_code=403, detail="Unauthorized coach ID.")
+
+    # Enforce selected team authorization if provided
+    if data.selected_team_id:
+        verify_team_ownership(data.selected_team_id, current_coach)
+
     profile_context = (
         f"Directly advising Coach {data.coach_name} based in {data.location}. "
         f"Tailor advice for competitive {data.age_group} fastpitch players."
     )
 
-    if data.coach_id is not None:
-        try:
-            # Instantiate agent executor dynamically for the logged-in coach
-            agent_executor = build_agent_executor(data.coach_id, data.selected_team_id)
-            
-            result = agent_executor.invoke({
-                "input": data.question,
-                "chat_history": []
-            })
-            
-            # Extract source documents from intermediate steps if search_playbook was called
-            sources = []
-            if "intermediate_steps" in result:
-                for action, observation in result["intermediate_steps"]:
-                    if action.tool == "search_playbook":
-                        sources.append("softball_playbook")
-            
-            return {
-                "answer": result["output"],
-                "sources": list(set(sources))
-            }
-        except Exception as e:
-            # Fallback to the classic RAG chain if agent execution fails
-            print(f"Agent execution failed, falling back to RAG chain: {e}")
-            pass
-
-    # Simple non-streaming wrapper fallback
-    result = chain.invoke({
-        "question": data.question,
-        "profile_context": profile_context
-    })
-    return {
-        "answer": result["answer"],
-        "sources": [doc.metadata.get("source", "Unknown").split('/')[-1] for doc in result.get("source_documents", [])]
-    }
+    try:
+        # Instantiate agent executor dynamically for the logged-in coach
+        agent_executor = build_agent_executor(current_coach["id"], data.selected_team_id)
+        
+        result = agent_executor.invoke({
+            "input": data.question,
+            "chat_history": []
+        })
+        
+        # Extract source documents from intermediate steps if search_playbook was called
+        sources = []
+        if "intermediate_steps" in result:
+            for action, observation in result["intermediate_steps"]:
+                if action.tool == "search_playbook":
+                    sources.append("softball_playbook")
+        
+        return {
+            "answer": result["output"],
+            "sources": list(set(sources))
+        }
+    except Exception as e:
+        # Fallback to the classic RAG chain if agent execution fails
+        print(f"Agent execution failed, falling back to RAG chain: {e}")
+        
+        # Simple non-streaming wrapper fallback
+        result = chain.invoke({
+            "question": data.question,
+            "profile_context": profile_context
+        })
+        return {
+            "answer": result["answer"],
+            "sources": [doc.metadata.get("source", "Unknown").split('/')[-1] for doc in result.get("source_documents", [])]
+        }
 
 # 4. Team Management API Routes
 @app.post("/api/teams")
-def api_create_team(data: TeamRequest):
+def api_create_team(data: TeamRequest, current_coach: dict = Depends(get_current_coach)):
+    if data.coach_id != current_coach["id"]:
+        raise HTTPException(status_code=403, detail="Unauthorized coach ID.")
     try:
-        new_team = create_team(data.coach_id, data.team_name, data.season, data.age_group, data.innings_per_game)
+        new_team = create_team(current_coach["id"], data.team_name, data.season, data.age_group, data.innings_per_game)
         return new_team
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
 @app.get("/api/teams/{coach_id}")
-def api_get_teams(coach_id: int):
+def api_get_teams(coach_id: int, current_coach: dict = Depends(get_current_coach)):
+    if coach_id != current_coach["id"]:
+        raise HTTPException(status_code=403, detail="Unauthorized access to this coach's teams.")
     try:
         teams = get_coach_teams(coach_id)
         return teams
@@ -307,9 +319,11 @@ def api_get_teams(coach_id: int):
         raise HTTPException(status_code=500, detail=str(e))
     
 @app.post("/api/teams/{team_id}/active")
-def api_set_active(team_id: int, data: SetActiveRequest):
+def api_set_active(team_id: int, data: SetActiveRequest, current_coach: dict = Depends(get_current_coach), role: str = Depends(verify_team_ownership)):
+    if data.coach_id != current_coach["id"]:
+        raise HTTPException(status_code=403, detail="Unauthorized coach ID.")
     try:
-        updated_team = set_active_team(data.coach_id, team_id)
+        updated_team = set_active_team(current_coach["id"], team_id)
         if not updated_team:
             raise HTTPException(status_code=404, detail="Team not found or unauthorized.")
         return updated_team
@@ -317,10 +331,12 @@ def api_set_active(team_id: int, data: SetActiveRequest):
         raise HTTPException(status_code=500, detail=str(e))
     
 @app.put("/api/teams/{team_id}")
-def api_update_team(team_id: int, data: TeamUpdateRequest):
+def api_update_team(team_id: int, data: TeamUpdateRequest, current_coach: dict = Depends(get_current_coach), role: str = Depends(verify_team_ownership)):
+    if data.coach_id != current_coach["id"]:
+        raise HTTPException(status_code=403, detail="Unauthorized coach ID.")
     try:
         updated = update_team(
-            data.coach_id, team_id, data.team_name, data.season,
+            current_coach["id"], team_id, data.team_name, data.season,
             data.wins, data.losses, data.ties, data.age_group, data.is_active, data.innings_per_game
         )
         if not updated:
@@ -330,9 +346,11 @@ def api_update_team(team_id: int, data: TeamUpdateRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/teams/{team_id}/coaches")
-def api_invite_coach(team_id: int, data: InviteCoachRequest):
+def api_invite_coach(team_id: int, data: InviteCoachRequest, current_coach: dict = Depends(get_current_coach), role: str = Depends(verify_team_ownership)):
+    if data.coach_id != current_coach["id"]:
+        raise HTTPException(status_code=403, detail="Unauthorized coach ID.")
     # Verify the requester is a Head Coach
-    if not check_is_head_coach(data.coach_id, team_id):
+    if not check_is_head_coach(current_coach["id"], team_id):
         raise HTTPException(status_code=403, detail="Only a Head Coach can invite other coaches.")
     
     result = add_coach_to_team(team_id, data.email, data.role)
@@ -342,9 +360,13 @@ def api_invite_coach(team_id: int, data: InviteCoachRequest):
 
 # 5. Player Management API Routes
 @app.post("/api/players")
-def api_add_player(data: PlayerRequest):
+def api_add_player(data: PlayerRequest, current_coach: dict = Depends(get_current_coach)):
+    if data.coach_id != current_coach["id"]:
+        raise HTTPException(status_code=403, detail="Unauthorized coach ID.")
+    # Verify the coach is associated with the target team
+    verify_team_ownership(data.team_id, current_coach)
     try:
-        new_player = add_player(data.coach_id, data.team_id, data.player_name, data.player_number, data.batting_hand, data.throwing_hand, data.parent_player_id)
+        new_player = add_player(current_coach["id"], data.team_id, data.player_name, data.player_number, data.batting_hand, data.throwing_hand, data.parent_player_id)
         if not new_player:
             raise HTTPException(status_code=500, detail="Failed to create player.")
         return new_player
@@ -354,7 +376,7 @@ def api_add_player(data: PlayerRequest):
         raise HTTPException(status_code=500, detail=str(e))
     
 @app.get("/api/players/{team_id}")
-def api_get_roster(team_id: int):
+def api_get_roster(team_id: int, current_coach: dict = Depends(get_current_coach), role: str = Depends(verify_team_ownership)):
     try:
         roster = get_team_players(team_id)
         return roster
@@ -362,9 +384,26 @@ def api_get_roster(team_id: int):
         raise HTTPException(status_code=500, detail=str(e))
     
 @app.put("/api/players/{player_id}")
-def api_update_player(player_id: int, data: PlayerUpdateRequest):
+def api_update_player(player_id: int, data: PlayerUpdateRequest, current_coach: dict = Depends(get_current_coach)):
+    if data.coach_id != current_coach["id"]:
+        raise HTTPException(status_code=403, detail="Unauthorized coach ID.")
+    
+    # Retrieve the player's team_id to verify coach ownership
+    conn = get_db_connection()
+    cursor = conn.cursor()
     try:
-        updated = update_player_stats(data.coach_id, player_id, dict(data))
+        cursor.execute("SELECT team_id FROM players WHERE id = %s LIMIT 1;", (player_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Player not found.")
+        team_id = row["team_id"]
+    finally:
+        cursor.close()
+        conn.close()
+        
+    verify_team_ownership(team_id, current_coach)
+    try:
+        updated = update_player_stats(current_coach["id"], player_id, dict(data))
         if not updated:
             raise HTTPException(status_code=404, detail="Player not found.")
         return updated
@@ -374,9 +413,26 @@ def api_update_player(player_id: int, data: PlayerUpdateRequest):
         raise HTTPException(status_code=500, detail=str(e))
     
 @app.delete("/api/players/{player_id}")
-def api_delete_player(player_id: int, coach_id: int):
+def api_delete_player(player_id: int, coach_id: int, current_coach: dict = Depends(get_current_coach)):
+    if coach_id != current_coach["id"]:
+        raise HTTPException(status_code=403, detail="Unauthorized coach ID.")
+        
+    # Retrieve the player's team_id to verify coach ownership
+    conn = get_db_connection()
+    cursor = conn.cursor()
     try:
-        success = delete_player(coach_id, player_id)
+        cursor.execute("SELECT team_id FROM players WHERE id = %s LIMIT 1;", (player_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Player not found.")
+        team_id = row["team_id"]
+    finally:
+        cursor.close()
+        conn.close()
+        
+    verify_team_ownership(team_id, current_coach)
+    try:
+        success = delete_player(current_coach["id"], player_id)
         if not success:
             raise HTTPException(status_code=404, detail="Player not found.")
         return {"success": True}
@@ -386,10 +442,13 @@ def api_delete_player(player_id: int, coach_id: int):
         raise HTTPException(status_code=500, detail=str(e))
     
 @app.post("/api/players/bulk-update")
-def api_bulk_update_players(data: BulkImportRequest):
+def api_bulk_update_players(data: BulkImportRequest, current_coach: dict = Depends(get_current_coach)):
+    if data.coach_id != current_coach["id"]:
+        raise HTTPException(status_code=403, detail="Unauthorized coach ID.")
+    verify_team_ownership(data.team_id, current_coach)
     try:
         player_data = [dict(p) for p in data.players]
-        updated = bulk_update_player_stats(data.coach_id, data.team_id, player_data)
+        updated = bulk_update_player_stats(current_coach["id"], data.team_id, player_data)
         return updated
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))

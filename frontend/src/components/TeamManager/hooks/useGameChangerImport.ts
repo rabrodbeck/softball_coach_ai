@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Player } from '../types';
+import { apiFetch } from '../../../utils/api';
 import { normalizeHand } from '../types';
 
 interface UseGameChangerImportProps {
@@ -270,9 +271,8 @@ export function useGameChangerImport({
             return;
         }
         try {
-            const response = await fetch(`${API_BASE}/api/players/bulk-update`, {
+            const response = await apiFetch(`/api/players/bulk-update`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     coach_id: coachId,
                     team_id: selectedTeamId,

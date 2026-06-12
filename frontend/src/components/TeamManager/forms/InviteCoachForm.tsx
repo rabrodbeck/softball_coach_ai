@@ -1,7 +1,5 @@
 import { useState } from 'react';
-
-// Define the environment variable fallback locally in this file
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { apiFetch } from '../../../utils/api';
 
 interface InviteCoachFormProps {
     teamId: number;
@@ -22,9 +20,8 @@ export function InviteCoachForm({ teamId, coachId, onInviteSuccess }: InviteCoac
         setLoading(true);
         setMessage(null);
         try {
-            const res = await fetch(`${API_BASE}/api/teams/${teamId}/coaches`, {
+            const res = await apiFetch(`/api/teams/${teamId}/coaches`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ coach_id: coachId, email, role })
             });
             const data = await res.json();

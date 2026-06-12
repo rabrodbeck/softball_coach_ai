@@ -3,6 +3,7 @@ import { Plus, Users, X, Trophy, Pencil, Trash2, TrendingUp, Map } from 'lucide-
 
 // Shared type-only imports and local helpers
 import type { Team, Player, TeamManagerProps } from './types';
+import { apiFetch } from '../../utils/api';
 
 
 // Modular Forms and Views
@@ -140,7 +141,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
     const fetchTeams = async () => {
         setLoading(true);
         try {
-            const response = await fetch(`${API_BASE}/api/teams/${coachId}`);
+            const response = await apiFetch(`/api/teams/${coachId}`);
             if (response.ok) {
                 const data = await response.json();
                 setTeams(data);
@@ -168,7 +169,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
         if (!selectedTeamId) return;
         setLoading(true);
         try {
-            const response = await fetch(`${API_BASE}/api/players/${selectedTeamId}`);
+            const response = await apiFetch(`/api/players/${selectedTeamId}`);
             if (response.ok) {
                 const data = await response.json();
                 setPlayers(data);
@@ -209,9 +210,8 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
     const handleCreateTeam = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            const response = await fetch(`${API_BASE}/api/teams`, {
+            const response = await apiFetch(`/api/teams`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     coach_id: coachId,
                     team_name: teamName,
@@ -235,9 +235,8 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
         e.preventDefault();
         if (!editingTeam) return;
         try {
-            const response = await fetch(`${API_BASE}/api/teams/${editingTeam.id}`, {
+            const response = await apiFetch(`/api/teams/${editingTeam.id}`, {
                 method: "PUT",
-                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     coach_id: coachId,
                     team_name: teamName,
@@ -268,9 +267,8 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
         e.preventDefault();
         if (!selectedTeamId) return;
         try {
-            const response = await fetch(`${API_BASE}/api/players`, {
+            const response = await apiFetch(`/api/players`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     coach_id: coachId,
                     team_id: selectedTeamId,
@@ -293,9 +291,8 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
         e.preventDefault();
         if (!editingPlayer) return;
         try {
-            const response = await fetch(`${API_BASE}/api/players/${editingPlayer.id}`, {
+            const response = await apiFetch(`/api/players/${editingPlayer.id}`, {
                 method: "PUT",
-                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     coach_id: coachId,
                     player_name: playerName,
@@ -350,7 +347,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
     const handleDeletePlayer = async (playerId: number) => {
         if (!window.confirm("Are you sure you want to remove this player from the team?")) return;
         try {
-            const response = await fetch(`${API_BASE}/api/players/${playerId}?coach_id=${coachId}`, { method: "DELETE" });
+            const response = await apiFetch(`/api/players/${playerId}?coach_id=${coachId}`, { method: "DELETE" });
             if (response.ok) {
                 fetchPlayers();
             }
