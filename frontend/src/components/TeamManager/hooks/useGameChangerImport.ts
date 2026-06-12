@@ -4,7 +4,6 @@ import { apiFetch } from '../../../utils/api';
 import { normalizeHand } from '../types';
 
 interface UseGameChangerImportProps {
-    API_BASE: string;
     selectedTeamId: number | null;
     coachId: number;
     players: Player[];
@@ -12,7 +11,6 @@ interface UseGameChangerImportProps {
 }
 
 export function useGameChangerImport({
-    API_BASE,
     selectedTeamId,
     coachId,
     players,

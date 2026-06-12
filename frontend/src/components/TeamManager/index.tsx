@@ -18,8 +18,6 @@ import { DefensiveRotationView } from './analytics/DefensiveRotationView';
 // Hook uploader
 import { useGameChangerImport } from './hooks/useGameChangerImport';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-
 export default function TeamManager({ coachId, onClose, selectedTeamId, onSelectTeam }: TeamManagerProps) {
     const [activeTab, setActiveTab] = useState<'teams' | 'players'>('teams');
     const [teams, setTeams] = useState<Team[]>([]);
@@ -200,7 +198,6 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
         handleFileImport,
         handleConfirmImport
     } = useGameChangerImport({
-        API_BASE,
         selectedTeamId,
         coachId,
         players,
