@@ -4,6 +4,7 @@ import jwt
 import requests
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from cryptography.x509 import load_pem_x509_certificate
 from src.database import get_coach_by_email, get_db_connection
 
 security = HTTPBearer()
@@ -40,26 +41,34 @@ def verify_firebase_token(credentials: HTTPAuthorizationCredentials = Depends(se
         unverified_headers = jwt.get_unverified_header(token)
         kid = unverified_headers.get("kid")
         if not kid:
+            print("Auth Error: Token headers missing kid.")
             raise HTTPException(status_code=401, detail="Token headers missing kid.")
         
         # Match with current Google certificates
         public_keys = get_firebase_public_keys()
         cert = public_keys.get(kid)
         if not cert:
+            print(f"Auth Error: Invalid key ID (kid) '{kid}' for token.")
             raise HTTPException(status_code=401, detail="Invalid key ID (kid) for token.")
         
+        # Convert X509 certificate string to a public key object
+        cert_obj = load_pem_x509_certificate(cert.encode('utf-8'))
+        public_key = cert_obj.public_key()
+
         # Decode and Validate signature, expiration, audience, and issuer
         decoded = jwt.decode(
             token,
-            cert,
+            public_key,
             algorithms=["RS256"],
             audience=FIREBASE_PROJECT_ID,
             issuer=f"https://securetoken.google.com/{FIREBASE_PROJECT_ID}"
         )
         return decoded
-    except jwt.ExpiredSignatureError:
+    except jwt.ExpiredSignatureError as e:
+        print(f"Auth Error: Token expired: {e}")
         raise HTTPException(status_code=401, detail="Authentication token has expired")
     except jwt.InvalidTokenError as e:
+        print(f"Auth Error: Invalid token: {e} | Project ID: '{FIREBASE_PROJECT_ID}' | Headers: {jwt.get_unverified_header(token)}")
         raise HTTPException(status_code=401, detail=f"Invalid authentication token: {str(e)}")
     
 def get_current_coach(token_payload: dict = Depends(verify_firebase_token)) -> dict:
