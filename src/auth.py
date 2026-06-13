@@ -8,7 +8,7 @@ from cryptography.x509 import load_pem_x509_certificate
 from src.database import get_coach_by_email, get_db_connection
 
 security = HTTPBearer()
-FIREBASE_PROJECT_ID = os.environ.get("FIREBASE_PROJECT_ID", "softball_coach_ai")
+FIREBASE_PROJECT_ID = os.environ.get("FIREBASE_PROJECT_ID", "softball-coach-ai")
 
 # Cache for Google's public certificates (to avoid network lag on every request)
 _public_keys = {}
