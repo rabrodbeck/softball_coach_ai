@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Key, Mail, User, MapPin, Trophy, ShieldAlert, CheckCircle } from 'lucide-react';
 import type { CoachProfile } from '../App';
 import { auth, googleProvider } from '../firebase';
-import { signInWithPopup } from 'firebase/auth';
+import { signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { apiFetch } from '../utils/api';
 
 interface AuthPortalProps {
@@ -108,24 +108,66 @@ export default function AuthPortal({ onLoginSuccess, onContinueAsGuest }: AuthPo
         setLoading(true);
 
         try {
-            const response = await apiFetch(`/api/auth/login`, {
+            let firebaseUser = null;
+            try {
+                // 1. Try signing in with Firebase
+                const userCredential = await signInWithEmailAndPassword(auth, email, password);
+                firebaseUser = userCredential.user;
+            } catch (fbErr: any) {
+                // 2. If user doesn't exist in Firebase yet but exists in PG, auto-migrate them
+                if (fbErr.code === "auth/user-not-found" || fbErr.code === "auth/invalid-credential" || fbErr.code === "auth/invalid-email") {
+                    const dbResponse = await apiFetch(`/api/auth/login`, {
+                        method: 'POST',
+                        body: JSON.stringify({ username: email, password }),
+                    });
+                    
+                    if (dbResponse.ok) {
+                        // User credentials are correct in DB, create corresponding Firebase Auth user
+                        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                        firebaseUser = userCredential.user;
+                    } else {
+                        throw fbErr; // Fail with original Firebase credentials error
+                    }
+                } else {
+                    throw fbErr;
+                }
+            }
+
+            if (!firebaseUser || !firebaseUser.email) {
+                throw new Error("Failed to resolve authenticated session.");
+            }
+
+            // 3. Query the backend for the coach profile using their email
+            const response = await apiFetch(`/api/auth/google-login`, {
                 method: 'POST',
-                body: JSON.stringify({ username: email, password }),
+                body: JSON.stringify({
+                    email: firebaseUser.email,
+                    display_name: firebaseUser.displayName || 'Coach'
+                }),
             });
 
             if (!response.ok) {
                 const errData = await response.json();
-                throw new Error(errData.detail || "Invalid credentials.")
+                throw new Error(errData.detail || "Failed to retrieve coach profile from database.");
             }
 
-            // Extract the user profile from the database response and login
-            const profile = await response.json();
-            onLoginSuccess(profile);
+            const data = await response.json();
+            if (data.registered) {
+                onLoginSuccess(data.user);
+            } else {
+                throw new Error("Coach profile not registered in database.");
+            }
 
         } catch (err: any) {
-            setError(err.message || "Server connection failed.");
+            let errMsg = err.message || "Login failed.";
+            if (err.code === "auth/user-not-found" || err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
+                errMsg = "Invalid email or password.";
+            } else if (err.code === "auth/invalid-email") {
+                errMsg = "Invalid email address format.";
+            }
+            setError(errMsg);
         } finally {
-            setLoading(false)
+            setLoading(false);
         }        
     };
 
@@ -139,6 +181,7 @@ export default function AuthPortal({ onLoginSuccess, onContinueAsGuest }: AuthPo
         setLoading(true);
 
         try {
+            // 1. Create coach profile in the PostgreSQL database first
             const response = await apiFetch(`/api/auth/register`, {
                 method: "POST",
                 body: JSON.stringify({
@@ -152,16 +195,38 @@ export default function AuthPortal({ onLoginSuccess, onContinueAsGuest }: AuthPo
 
             if (!response.ok) {
                 const errData = await response.json();
-                throw new Error(errData.detail || "Registration failed.");
+                throw new Error(errData.detail || "Registration failed on database.");
             }
 
-            setSuccess("Account created successfully! Redirecting to login...");
-            setTimeout(() => {
-                setSuccess(null);
-                setMode("login");
-            }, 2000);
+            // 2. Create the user in Firebase Auth
+            await createUserWithEmailAndPassword(auth, email, password);
+
+            setSuccess("Account created successfully! Logging in...");
+            
+            // 3. Resolve the new profile in our local session state
+            const profileRes = await apiFetch(`/api/auth/google-login`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    email,
+                    display_name: coachName
+                }),
+            });
+            if (profileRes.ok) {
+                const data = await profileRes.json();
+                if (data.registered) {
+                    onLoginSuccess(data.user);
+                }
+            }
         } catch (err: any) {
-            setError(err.message || "Registration failed.");
+            let errMsg = err.message || "Registration failed.";
+            if (err.code === "auth/email-already-in-use") {
+                errMsg = "This email is already in use.";
+            } else if (err.code === "auth/weak-password") {
+                errMsg = "Password is too weak. Must be at least 6 characters.";
+            } else if (err.code === "auth/invalid-email") {
+                errMsg = "Invalid email address format.";
+            }
+            setError(errMsg);
         } finally {
             setLoading(false);
         }
