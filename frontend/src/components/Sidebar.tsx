@@ -1,19 +1,23 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ClipboardList, Trophy } from 'lucide-react';
 
 interface SidebarProps {
     currentDivision: string;
     isGuest: boolean;
+    selectedTeamId: number | null;
+    onCreateLineup: () => void;
 }
 
-export default function Sidebar({ currentDivision, isGuest }: SidebarProps) {
+export default function Sidebar({ currentDivision, isGuest, selectedTeamId, onCreateLineup }: SidebarProps) {
     const [selectedAge, setSelectedAge] = useState(currentDivision);
     
-    const handleGeneratePlaybook = () => {
-        // Generate custom instruction payload and pass it to an active event state trigger
-        const macroPrompt = `Build a comprehensive practice plan template for a ${selectedAge} fastpitch softball team that lasts 90 minutes.`;
+    // Sync dropdown state whenever active team division changes
+    useEffect(() => {
+        setSelectedAge(currentDivision);
+    }, [currentDivision]);
 
-        // Broadcast prompt event to window listener (or simple global callback state)
+    const handleGeneratePlaybook = () => {
+        const macroPrompt = `Build a comprehensive practice plan template for a ${selectedAge} fastpitch softball team that lasts 90 minutes.`;
         const event = new CustomEvent("generate-playbook", { detail: { prompt: macroPrompt, division: selectedAge }});
         window.dispatchEvent(event);
     };
@@ -41,8 +45,23 @@ export default function Sidebar({ currentDivision, isGuest }: SidebarProps) {
                 Generate Playbook 
             </button>
 
+            <button 
+                onClick={onCreateLineup} 
+                disabled={!selectedTeamId}
+                className="btn-generate-playbook"
+                style={{ 
+                    marginTop: '10px', 
+                    background: 'linear-gradient(135deg, var(--accent) 0%, #0d9488 100%)',
+                    opacity: selectedTeamId ? 1 : 0.4, 
+                    cursor: selectedTeamId ? 'pointer' : 'not-allowed' 
+                }}
+            >
+                <Trophy className="icon-btn" />
+                Create Lineup
+            </button>
+
             {isGuest && (
-                <div className="guest-badge-warning">
+                <div className="guest-badge-warning" style={{ marginTop: '20px' }}>
                     <span>⚠️ Running in Guest Mode. Experience is standard. Log in to personalize location, name, and age group.</span>
                 </div>
             )}

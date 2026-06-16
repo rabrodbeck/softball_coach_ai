@@ -7,6 +7,7 @@ import { Trophy, Menu, Users } from 'lucide-react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './firebase';
 import { apiFetch } from './utils/api';
+import LineupCreatorModal from './components/LineupCreatorModal';
 
 export interface CoachProfile {
   id: number;
@@ -20,6 +21,7 @@ interface SelectedTeam {
   id: number;
   team_name: string;
   age_group: string;
+  innings_per_game: number;
 }
 
 function App() {
@@ -27,6 +29,7 @@ function App() {
   const [isGuest, setIsGuest] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showTeamManager, setShowTeamManager] = useState(false);
+  const [ showLineupCreator, setShowLineupCreator] = useState(false);
   
   // Selected Team tracked in browser session state
   const [selectedTeam, setSelectedTeam] = useState<SelectedTeam | null>(null);
@@ -80,8 +83,13 @@ function App() {
     setSelectedTeam(null);
   };
 
-  const handleSelectTeam = (team: { id: number; team_name: string; age_group: string }) => {
-    const selected = { id: team.id, team_name: team.team_name, age_group: team.age_group };
+  const handleSelectTeam = (team: { id: number; team_name: string; age_group: string; innings_per_game?: number }) => {
+    const selected = { 
+      id: team.id, 
+      team_name: team.team_name, 
+      age_group: team.age_group, 
+      innings_per_game: team.innings_per_game || 7 
+    };
     setSelectedTeam(selected);
     if (user) {
       localStorage.setItem(`selected_team_${user.id}`, JSON.stringify(selected));
@@ -136,6 +144,8 @@ function App() {
         <SideBar
           currentDivision={currentAgeGroup}
           isGuest={isGuest}
+          selectedTeamId={selectedTeam ? selectedTeam.id : null}
+          onCreateLineup={() => setShowLineupCreator(true)}
         />
         <main className='whiteboard-area'>
           <ChatArea 
@@ -152,6 +162,16 @@ function App() {
           onClose={() => setShowTeamManager(false)}
           selectedTeamId={selectedTeam ? selectedTeam.id : null}
           onSelectTeam={handleSelectTeam}
+        />
+      )}
+
+      {/* Render the Lineup Creator modal when toggled */}
+      {showLineupCreator && selectedTeam && (
+        <LineupCreatorModal
+          teamId={selectedTeam.id}
+          teamName={selectedTeam.team_name}
+          inningsPerGame={selectedTeam.innings_per_game || 7}
+          onClose={() => setShowLineupCreator(false)}
         />
       )}
     </div>
