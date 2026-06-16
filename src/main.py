@@ -3,8 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, EmailStr
 from src.retriever import build_chain, build_agent_executor
-from src.database import get_coach_by_email, authenticate_coach, register_coach, create_team, get_coach_teams, set_active_team, update_team, add_player, get_team_players, update_player_stats, delete_player, bulk_update_player_stats, check_is_head_coach, add_coach_to_team, get_db_connection
+from src.database import get_coach_by_email, authenticate_coach, register_coach, create_team, get_coach_teams, set_active_team, update_team, add_player, get_team_players, update_player_stats, delete_player, bulk_update_player_stats, check_is_head_coach, add_coach_to_team, get_db_connection, update_player_eligibility, save_team_lineup, get_team_lineups, delete_team_lineup
 from src.auth import get_current_coach, verify_team_ownership
+from src.lineup_generator import LineupGenerator
 
 app = FastAPI(title = "🥎 Softball Coach AI API")
 
@@ -58,6 +59,19 @@ class TeamRequest(BaseModel):
     season: str
     age_group: str
     innings_per_game: int = 7
+
+class UpdateEligibilityRequest(BaseModel):
+    eligible_positions: str
+
+class GenerateLineupRequest(BaseModel):
+    player_ids: list[int]
+    innings_count: int
+
+class SaveLineupRequest(BaseModel):
+    game_date: str # YYY-MM-DD format
+    opponent: str
+    innings_count: int
+    lineup_data: dict
 
 class SetActiveRequest(BaseModel):
     coach_id: int
@@ -486,3 +500,87 @@ def api_google_register(data: GoogleRegisterRequest):
 @app.get("/")
 def read_root():
     return {"status": "ok", "app": "Softball Coach AI API"}
+
+@app.put("/api/players/{player_id}/eligibility")
+def api_update_eligibility(player_id: int, data: UpdateEligibilityRequest, current_coach: dict = Depends(get_current_coach)):
+    # Verify player's team ownership
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT team_id FROM players WHERE id = %s LIMIT 1;", (player_id, ))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Player not found.")
+        team_id = row["team_id"]
+    finally:
+        cursor.close()
+        conn.close()
+
+    verify_team_ownership(team_id, current_coach)
+    success = update_player_eligibility(player_id, data.eligible_positions)
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to update eligibility.")
+    return {"success": True}
+
+@app.post("api/teams/{team_id}/generate-lineup")
+def api_generate_lineup(team_id: int, data: GenerateLineupRequest, current_coach: dict = Depends(get_current_coach), role: str = Depends(verify_team_ownership)):
+    # Fetch present players with their eligible positions
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT id, player_name, eligible_positions FROM players WHERE team_id = %s AND id IN %s;", (team_id, tuple(data.player_ids)))
+        rows = cursor.fetchall()
+    finally:
+        cursor.close()
+        conn.close()
+
+    if not rows:
+        raise HTTPException(status_code=400, detail="No active players found for rotation.")
+    
+    # Format players for rules engine
+    players_data = []
+    for r in rows:
+        positions_str = r.get("eligible_positions") or "P,C,1B,2B,3B,SS,LF,CF,RF"
+        players_data.append({
+            "id": r["id"],
+            "name": r["player_name"],
+            "eligible_positions": [p.strip() for p in positions_str.split(",") if p.strip()]
+        })
+
+    # Generate rotation
+    generator = LineupGenerator(players_data, data.innings_count)
+    result = generator.generate()
+
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("error"))
+    
+    return result
+
+@app.post("/api/teams/{team_id}/lineups")
+def api_save_lineup(team_id: int, data: SaveLineupRequest, current_coach: dict = Depends(get_current_coach), role: str = Depends(verify_team_ownership)):
+    lineup_id = save_team_lineup(team_id, current_coach["id"], data.game_date, data.opponent, data.innings_count, data.lineup_data)
+    return {"success": True, "lineup_id": lineup_id}
+
+@app.get("/api/teams/{team_id}/lineups")
+def api_get_lineups(team_id: int, current_coach: dict = Depends(get_current_coach), role: str = Depends(verify_team_ownership)):
+    lineups = get_team_lineups(team_id)
+    return lineups
+
+@app.delete("/api/lineups/{lineup_id}")
+def api_delete_lineup(lineup_id: int, current_coach: dict = Depends(get_current_coach)):
+    # Check ownership
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT team_id FROM lineups WHERE id = %s LIMIT 1;", (lineup_id,))
+        row = cursor.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Lineup not found.")
+        team_id = row["team_id"]
+    finally:
+        cursor.close()
+        conn.close()
+        
+    verify_team_ownership(team_id, current_coach)
+    delete_team_lineup(lineup_id)
+    return {"success": True}
