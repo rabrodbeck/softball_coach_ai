@@ -38,6 +38,7 @@ export interface Player {
     on_base_percentage: number;
     created_at: string;
     updated_at: string;
+    eligible_positions?: string;
     // Pitching stats
     games_pitched: number;
     games_started: number;
