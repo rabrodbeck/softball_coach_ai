@@ -80,6 +80,29 @@ def init_db():
                    primary_age_group TEXT NOT NULL
                    )
                    ''')
+    """Alter players table to add eligible_positions and create lineups table if it does not exist."""
+    cursor.execute("""
+                   ALTER TABLE players 
+                   ADD COLUMN IF NOT EXISTS eligible_positions VARCHAR(255) DEFAULT 'P,C,1B,2B,SS,3B,LF,CF,RF';
+                   """)
+    
+    cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS lineups (
+                   id serial primary key,
+                   team_id INTEGER REFERENCES team(id) ON DELETE CASCADE,
+                   game_date DATE NOT NULL,
+                   opponent VARCHAR(100) NOT NULL,
+                   innings_count INTEGER NOT NULL,
+                   lineup_data JSONB NOT NULL,
+                   created_by_coach_id INTEGER REFERENCES coaches(id) ON DELETE SET NULL,
+                   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                   )
+                   """)
+    
+    cursor.execute("""
+                   ALTER TABLE lineups ENABLE ROW LEVEL SECURITY;
+                   """)
+
     conn.commit()
     conn.close()
 
@@ -1133,3 +1156,75 @@ def get_system_prompt(key: str, fallback_content: str) -> str:
 
     # 3. Fallback to hardcoded content if database is empty or connection fails
     return fallback_content
+
+def update_player_eligibility(player_id: int, eligible_positions: str):
+    """Updates the allowed positions list for a specific player."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "UPDATE players SET eligible_positions = %s WHERE id = %s;",
+            (eligible_positions, player_id)
+        )
+        conn.commit()
+        return True
+    finally:
+        cursor.close()
+        conn.close()
+
+def save_team_lineup(team_id: int, coach_id: int, game_date: str, opponent: str, innings_count: int, lineup_data: dict):
+    """Saves or overwrites a team lineup for a specific game."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Check if game lineup already exists to overwrite it
+        cursor.execute(
+            "SELECT id FROM lineups WHERE team_id = %s AND game_date = %s AND opponent = %s LIMIT 1;",
+            (team_id, game_date, opponent)
+        )
+        existing = cursor.fetchone()
+
+        import json
+        json_data = json.dumps(lineup_data)
+
+        if existing:
+            cursor.execute(
+                "UPDATE lineups SET innings_count = %s, lineup_data = %s, created_by_coach_id = %s WHERE id = %s RETURNING id;",
+                (innings_count, json_data, coach_id, existing["id"])
+            )
+        else:
+            cursor.execute(
+                "INSERT INTO lineups (team_id, created_by_coach_id, game_date, opponent, innings_count, lineup_data) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id;",
+                (team_id, coach_id, game_date, opponent, innings_count, json_data)
+            )
+        conn.commit()
+        return cursor.fetchone()["id"]
+    finally:
+        cursor.close()
+        conn.close()
+
+def get_team_lineups(team_id: int):
+    """Fetches all save lineups for a specificd team."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT id, game_date, opponent, innings_count, lineup_data, created_at FROM lineups where team_id = %s ORDER BY game_date DESC, created_at DESC;",
+            (team_id,)
+        )
+        return cursor.fetchall()
+    finally:
+        cursor.close()
+        conn.close()
+
+def delete_team_lineup(lineup_id: int):
+    """Deletes a saved lineup."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM lineups WHERE id = %s;", (lineup_id,))
+        conn.commit()
+        return True
+    finally:
+        cursor.close()
+        conn.close()
