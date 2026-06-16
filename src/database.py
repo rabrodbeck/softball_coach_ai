@@ -89,7 +89,7 @@ def init_db():
     cursor.execute("""
                     CREATE TABLE IF NOT EXISTS lineups (
                    id serial primary key,
-                   team_id INTEGER REFERENCES team(id) ON DELETE CASCADE,
+                   team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
                    game_date DATE NOT NULL,
                    opponent VARCHAR(100) NOT NULL,
                    innings_count INTEGER NOT NULL,
@@ -540,7 +540,7 @@ def get_team_players(team_id: int):
         cursor.execute(
             """
             SELECT 
-                p.id, p.team_id, p.player_name, p.player_number, p.batting_hand, p.throwing_hand, p.games_played, p.parent_player_id, p.created_at, p.updated_at,
+                p.id, p.team_id, p.player_name, p.player_number, p.batting_hand, p.throwing_hand, p.games_played, p.parent_player_id, p.created_at, p.updated_at, p.eligible_positions,
                 COALESCE(t.innings_per_game, 7) as innings_per_game,
                 COALESCE(o.plate_appearances, 0) as plate_appearances,
                 COALESCE(o.at_bats, 0) as at_bats,
@@ -623,13 +623,14 @@ def update_player_stats(coach_id: int, player_id: int, stats: dict):
             """
             UPDATE players
             SET player_name = %s, player_number = %s, batting_hand = %s, throwing_hand = %s, games_played = %s, parent_player_id = %s,
+                eligible_positions = %s,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
             RETURNING *;
             """,
             (
                 stats["player_name"].strip(), stats["player_number"], stats["batting_hand"], stats["throwing_hand"],
-                stats["games_played"], parent_id, player_id
+                stats["games_played"], parent_id, stats.get("eligible_positions") or "P,C,1B,2B,3B,SS,LF,CF,RF", player_id
             )
         )
         player_row = cursor.fetchone()

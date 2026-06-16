@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Users, X, Trophy, Pencil, Trash2, TrendingUp, Map } from 'lucide-react';
-import { LineupGeneratorTab } from './LineupGenerator/index';
 
 // Shared type-only imports and local helpers
 import type { Team, Player, TeamManagerProps } from './types';
@@ -20,7 +19,7 @@ import { DefensiveRotationView } from './analytics/DefensiveRotationView';
 import { useGameChangerImport } from './hooks/useGameChangerImport';
 
 export default function TeamManager({ coachId, onClose, selectedTeamId, onSelectTeam }: TeamManagerProps) {
-    const [activeTab, setActiveTab] = useState<'teams' | 'players' | 'lineups'>('teams');
+    const [activeTab, setActiveTab] = useState<'teams' | 'players'>('teams');
     const [teams, setTeams] = useState<Team[]>([]);
     const [players, setPlayers] = useState<Player[]>([]);
     const [loading, setLoading] = useState(false);
@@ -98,6 +97,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
     const [passedBallsAllowed, setPassedBallsAllowed] = useState(0);
     const [runnersStolenBases, setRunnersStolenBases] = useState(0);
     const [runnersCaughtStealing, setRunnersCaughtStealing] = useState(0);
+    const [eligiblePositions, setEligiblePositions] = useState('P,C,1B,2B,3B,SS,LF,CF,RF');
 
     // Sorting State
     const [sortField, setSortField] = useState<keyof Player | null>(null);
@@ -297,6 +297,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                     player_number: playerNumber,
                     batting_hand: battingHand,
                     throwing_hand: throwingHand,
+                    eligible_positions: eligiblePositions,
                     games_played: gp,
                     plate_appearances: pa,
                     at_bats: ab,
@@ -407,6 +408,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
         setPassedBallsAllowed(player.passed_balls_allowed);
         setRunnersStolenBases(player.runners_stolen_bases);
         setRunnersCaughtStealing(player.runners_caught_stealing);
+        setEligiblePositions(player.eligible_positions || 'P,C,1B,2B,3B,SS,LF,CF,RF');
     };
 
     const cancelForms = () => {
@@ -417,6 +419,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
         setTeamName('');
         setPlayerName('');
         setPlayerNumber(0);
+        setEligiblePositions('P,C,1B,2B,3B,SS,LF,CF,RF');
         setBattingHand('Right');
         setThrowingHand('Right');
         setGp(0);
@@ -496,14 +499,6 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                     >
                         Player List
                     </button>
-                    <button 
-                        onClick={() => { setActiveTab('lineups'); cancelForms(); }} 
-                        disabled={!selectedTeamId}
-                        className={`tab-btn ${activeTab === 'lineups' ? 'active' : ''}`}
-                        style={{ padding: '8px 16px', background: activeTab === 'lineups' ? 'var(--accent-bg)' : 'transparent', border: 'none', color: activeTab === 'lineups' ? 'var(--accent)' : 'var(--text)', cursor: 'pointer', borderRadius: '6px', fontWeight: 'bold', opacity: selectedTeamId ? 1 : 0.4 }}
-                    >
-                        Lineup Generator
-                    </button>
                 </div>
 
                 {activeTab === 'teams' ? (
@@ -552,7 +547,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                             </div>
                         </div>
                     )
-                ) : activeTab === 'players' ? (
+                ) : (
                     /* PLAYERS VIEW TAB */
                     showAddPlayerForm || editingPlayer ? (
                         <PlayerForm
@@ -639,6 +634,8 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                             setRunnersStolenBases={setRunnersStolenBases}
                             runnersCaughtStealing={runnersCaughtStealing}
                             setRunnersCaughtStealing={setRunnersCaughtStealing}
+                            eligiblePositions={eligiblePositions}
+                            setEligiblePositions={setEligiblePositions}
                         />
                     ) : (
                         <div className="players-list-area">
@@ -997,15 +994,8 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                 </div>
                             )}
                         </div>
-                    )) : (
-                        /* LINEUPS VIEW TAB */
-                        activeTeam && (
-                            <LineupGeneratorTab 
-                                team={activeTeam!}
-                                players={players}
-                                onRefreshPlayers={fetchPlayers}
-                            />
-                    ))}
+                    )
+                )}
 
                 {/* GameChanger CSV Import Preview Modal */}
                 {showImportModal && (

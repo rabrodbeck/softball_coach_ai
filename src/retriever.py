@@ -212,7 +212,10 @@ def build_agent_executor(coach_id: int, selected_team_id: int | None = None):
                 if pos_list:
                     pos_innings = f" | PositionInnings: {', '.join(pos_list)}"
                 
-                output.append(f"- **{p['player_name']}** (Jersey #{p['player_number']}, Bats: {p.get('batting_hand', 'Right')}, Throws: {p.get('throwing_hand', 'Right')}) - {batting}{pitching}{fielding}{catching}{pos_innings}")
+                eligible_pos = p.get('eligible_positions') or 'P,C,1B,2B,3B,SS,LF,CF,RF'
+                eligible_str = f" | EligiblePositions: {eligible_pos}"
+                
+                output.append(f"- **{p['player_name']}** (Jersey #{p['player_number']}, Bats: {p.get('batting_hand', 'Right')}, Throws: {p.get('throwing_hand', 'Right')}) - {batting}{pitching}{fielding}{catching}{pos_innings}{eligible_str}")
             return "\n".join(output)
         except Exception as e:
             return f"Error fetching team roster: {str(e)}"
@@ -251,7 +254,12 @@ IMPORTANT STATISTICAL NOTES FOR THE AI AGENT:
    Before answering questions about who has played the most/least or which position has the most/least innings, calculate the total outs for each player/position to make sure you determine the correct minimum/maximum.
 4. Keep these position stats in mind when helping coaches analyze lineup options, position depth, and rotations.
 
-5. ACCESS PERMISSIONS & USER ROLES:
+5. POSITION ELIGIBILITY:
+   - The 'EligiblePositions' section lists a comma-separated list of positions a player is eligible to play.
+   - If a user asks "Who can play position X?" or "Who can X for me tonight?" (where X is Pitcher/P, Catcher/C, 1B, 2B, 3B, SS, LF, CF, or RF), scan each player's 'EligiblePositions' and list all players who have X in their eligibility list.
+   - If a user asks "What positions can player Y play?" or "Where is Y eligible?", check player Y's 'EligiblePositions' list and return those positions.
+
+6. ACCESS PERMISSIONS & USER ROLES:
    - Pay attention to the active coach's role in the roster output (Head Coach or Assistant Coach).
    - If they are an 'Assistant Coach' and ask you to perform a modification (e.g. 'delete Sarah', 'add a new player', 'update stats'), politely remind them that their account has Read-Only (Assistant Coach) privileges on this team. Explain that they can analyze data, run lineups, and search playbook strategies, but must contact the Head Coach to execute changes."""
 

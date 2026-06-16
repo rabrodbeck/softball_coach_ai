@@ -97,6 +97,8 @@ interface PlayerFormProps {
     setRunnersStolenBases: (val: number) => void;
     runnersCaughtStealing: number;
     setRunnersCaughtStealing: (val: number) => void;
+    eligiblePositions: string;
+    setEligiblePositions: (val: string) => void;
 }
 
 export function PlayerForm({
@@ -182,7 +184,9 @@ export function PlayerForm({
     runnersStolenBases,
     setRunnersStolenBases,
     runnersCaughtStealing,
-    setRunnersCaughtStealing
+    setRunnersCaughtStealing,
+    eligiblePositions,
+    setEligiblePositions
 }: PlayerFormProps) {
 
     // 1. Add Player Form
@@ -447,6 +451,47 @@ export function PlayerForm({
                         <label>Caught Stealing (CS)</label>
                         <input type="number" min="0" value={runnersCaughtStealing} onChange={(e) => setRunnersCaughtStealing(parseInt(e.target.value) || 0)} />
                     </div>
+                </div>
+
+                {/* Eligible Positions Section */}
+                <h4 style={{ margin: '20px 0 12px 0', fontSize: '13px', color: 'var(--accent)', fontWeight: 'bold', borderBottom: '1px dashed var(--border)', paddingBottom: '4px', textAlign: 'left' }}>Eligible Positions</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px', marginBottom: '20px', textAlign: 'left' }}>
+                    {["P", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF"].map(pos => {
+                        const isEligible = eligiblePositions.split(',').map((s: string) => s.trim()).includes(pos);
+                        return (
+                            <label key={pos} style={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: '8px', 
+                                padding: '8px 12px', 
+                                borderRadius: '6px', 
+                                border: '1px solid var(--border)', 
+                                background: isEligible ? 'var(--accent-bg)' : 'transparent', 
+                                cursor: 'pointer',
+                                userSelect: 'none',
+                                transition: 'all 0.15s ease',
+                                fontWeight: isEligible ? 'bold' : 'normal',
+                                color: isEligible ? 'var(--accent)' : 'var(--text)'
+                            }}>
+                                <input 
+                                    type="checkbox" 
+                                    checked={isEligible} 
+                                    onChange={() => {
+                                        const currentList = eligiblePositions.split(',').map((s: string) => s.trim()).filter(Boolean);
+                                        let newList;
+                                        if (currentList.includes(pos)) {
+                                            newList = currentList.filter((x: string) => x !== pos);
+                                        } else {
+                                            newList = [...currentList, pos];
+                                        }
+                                        setEligiblePositions(newList.join(','));
+                                    }}
+                                    style={{ cursor: 'pointer', accentColor: 'var(--accent)' }}
+                                />
+                                <span style={{ fontSize: '13px' }}>{pos}</span>
+                            </label>
+                        );
+                    })}
                 </div>
                 
                 <div className="form-actions" style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>

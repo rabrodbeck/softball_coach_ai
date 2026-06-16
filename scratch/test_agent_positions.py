@@ -12,8 +12,9 @@ def test():
     executor = build_agent_executor(coach_id=1, selected_team_id=2)
     
     queries = [
-        "Which player has played the most at first base?",
-        "Of all of the positions that Olivia has played, which has she played the least?"
+        "Who can pitch for me tonight?",
+        "What positions can Addy play?",
+        "Which player has played the most at first base?"
     ]
     
     for q in queries:
