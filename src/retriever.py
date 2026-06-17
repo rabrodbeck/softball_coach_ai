@@ -71,15 +71,8 @@ def build_chain():
     vectorstore = get_vectorstore()
 
     retriever = vectorstore.as_retriever(
-        search_type="similarity", 
-        search_kwargs={"k": 6}
-    )
-    
-    memory = ConversationBufferMemory(
-        memory_key="chat_history",
-        return_messages=True,
-        input_key="question",
-        output_key="answer"
+        search_type="mmr", 
+        search_kwargs={"k": 4, "fetch_k": 10}
     )
     
     llm = ChatOpenAI(
@@ -96,7 +89,6 @@ def build_chain():
     return ConversationalRetrievalChain.from_llm(
         llm=llm, 
         retriever=retriever, 
-        memory=memory,
         combine_docs_chain_kwargs={"prompt": prompt},
         return_source_documents=True,
         verbose=False
@@ -223,9 +215,9 @@ def build_agent_executor(coach_id: int, selected_team_id: int | None = None):
     @tool
     def search_playbook(query: str) -> str:
         """Searches the fastpitch softball coaching handbook and manual for drills, training advice, rules, and warmups.
-        Use this tool when the user asks questions about coaching advice, pitching drills, batting tips, or game strategies.
+        Use this tool when the user askes questions about coaching advice, pitching drills, batting tips, fielding drills, baserunning drills, or game strategies.
         """
-        docs = vectorstore.similarity_search(query, k=4)
+        docs = vectorstore.max_marginal_relevance_search(query, k=4, fetch_k=10)
         return "\n\n".join([doc.page_content for doc in docs])
 
     tools = [list_my_teams, get_team_roster, search_playbook]

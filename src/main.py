@@ -5,6 +5,7 @@ from pydantic import BaseModel, EmailStr, field_validator
 from src.retriever import build_chain, build_agent_executor
 from src.database import get_coach_by_email, authenticate_coach, register_coach, create_team, get_coach_teams, set_active_team, update_team, add_player, get_team_players, update_player_stats, delete_player, bulk_update_player_stats, check_is_head_coach, add_coach_to_team, get_db_connection, update_player_eligibility, save_team_lineup, get_team_lineups, delete_team_lineup
 from src.auth import get_current_coach, verify_team_ownership
+from langchain_core.messages import HumanMessage, AIMessage
 
 app = FastAPI(title = "🥎 Softball Coach AI API")
 
@@ -54,6 +55,10 @@ class GoogleRegisterRequest(BaseModel):
     location: str
     age_group: str
 
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
 class ChatRequest(BaseModel):
     question: str
     age_group: str
@@ -61,6 +66,7 @@ class ChatRequest(BaseModel):
     location: str
     coach_id: int | None = None
     selected_team_id: int | None = None
+    history: list[ChatMessage] | None = None
 
 class TeamRequest(BaseModel):
     coach_id: int
@@ -301,13 +307,23 @@ def api_chat(data: ChatRequest, current_coach: dict = Depends(get_current_coach)
         f"Tailor advice for competitive {data.age_group} fastpitch players."
     )
 
+    # Parse and trim conversation history to the last 10 messages (5 turns)
+    chat_history = []
+    if data.history:
+        recent_history = data.history[-10:]
+        for msg in recent_history:
+            if msg.role == "user":
+                chat_history.append(HumanMessage(content=msg.content))
+            elif msg.role == "assistant":
+                chat_history.append(AIMessage(content=msg.content))
+
     try:
         # Instantiate agent executor dynamically for the logged-in coach
         agent_executor = build_agent_executor(current_coach["id"], data.selected_team_id)
         
         result = agent_executor.invoke({
             "input": data.question,
-            "chat_history": []
+            "chat_history": chat_history
         })
         
         # Extract source documents from intermediate steps if search_playbook was called
@@ -328,6 +344,7 @@ def api_chat(data: ChatRequest, current_coach: dict = Depends(get_current_coach)
         # Simple non-streaming wrapper fallback
         result = chain.invoke({
             "question": data.question,
+            "chat_history": chat_history,
             "profile_context": profile_context
         })
         return {

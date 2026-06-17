@@ -60,6 +60,7 @@ export default function ChatArea({ userProfile, selectedTeamId }: ChatAreaProps)
                     location: userProfile?.location || "General Location",
                     coach_id: userProfile?.id,
                     selected_team_id: selectedTeamId || null,
+                    history: messages.map(m => ({ role: m.role, content: m.content })),
                 }),
             });
 
