@@ -1,12 +1,22 @@
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from src.retriever import build_chain, build_agent_executor
 from src.database import get_coach_by_email, authenticate_coach, register_coach, create_team, get_coach_teams, set_active_team, update_team, add_player, get_team_players, update_player_stats, delete_player, bulk_update_player_stats, check_is_head_coach, add_coach_to_team, get_db_connection, update_player_eligibility, save_team_lineup, get_team_lineups, delete_team_lineup
 from src.auth import get_current_coach, verify_team_ownership
 
 app = FastAPI(title = "🥎 Softball Coach AI API")
+
+# Helper function validate softball fractional innings (decimal part must be .0, .1, or .2)
+def check_innings_decimal(v: float) -> float:
+    if v < 0:
+        raise ValueError("Innings cannot be negative.")
+    whole = int(v)
+    fraction = round(v - whole, 1)
+    if fraction not in (0.0, 0.1, 0.2):
+        raise ValueError("Fractional innings must have a decimal part of .0, .1, or .2 (representing outs).")
+    return v
 
 # Enable CORS so Reach frontend running on local host can talk to it
 app.add_middleware(
@@ -146,6 +156,15 @@ class PlayerUpdateRequest(BaseModel):
     innings_lf: float = 0.0
     innings_cf: float = 0.0
     innings_rf: float = 0.0
+    # field validator for PlayerUpdateRequest innings
+    @field_validator(
+        "innings_pitched", "innings_caught", "innings_p", "innings_c",
+        "innings_1b", "innings_2b", "innings_3b", "innings_ss",
+        "innings_lf", "innings_cf", "innings_rf"
+    )
+    @classmethod
+    def validate_innings(cls, v: float) -> float:
+        return check_innings_decimal(v)
 
 class BulkImportPlayer(BaseModel):
     player_name: str
@@ -198,6 +217,15 @@ class BulkImportPlayer(BaseModel):
     innings_lf: float = 0.0
     innings_cf: float = 0.0
     innings_rf: float = 0.0
+    # field validator for BulkImportPlayer innings
+    @field_validator(
+        "innings_pitched", "innings_caught", "innings_p", "innings_c",
+        "innings_1b", "innings_2b", "innings_3b", "innings_ss",
+        "innings_lf", "innings_cf", "innings_rf"
+    )
+    @classmethod
+    def validate_innings(cls, v: float) -> float:
+        return check_innings_decimal(v)
 
 class BulkImportRequest(BaseModel):
     coach_id: int
