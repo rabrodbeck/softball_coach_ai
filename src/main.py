@@ -6,6 +6,8 @@ from src.retriever import build_chain, build_agent_executor
 from src.database import get_coach_by_email, authenticate_coach, register_coach, create_team, get_coach_teams, set_active_team, update_team, add_player, get_team_players, update_player_stats, delete_player, bulk_update_player_stats, check_is_head_coach, add_coach_to_team, get_db_connection, update_player_eligibility, save_team_lineup, get_team_lineups, delete_team_lineup
 from src.auth import get_current_coach, verify_team_ownership
 from langchain_core.messages import HumanMessage, AIMessage
+import json
+from sse_starlette import EventSourceResponse
 
 app = FastAPI(title = "🥎 Softball Coach AI API")
 
@@ -292,7 +294,7 @@ def api_google_register(data: GoogleRegisterRequest):
 chain = build_chain()
 
 @app.post("/api/chat")
-def api_chat(data: ChatRequest, current_coach: dict = Depends(get_current_coach)):
+async def api_chat(data: ChatRequest, current_coach: dict = Depends(get_current_coach)):
     # Enforce request coach_id matches authenticated coach ID
     request_coach_id = data.coach_id if data.coach_id is not None else current_coach["id"]
     if request_coach_id != current_coach["id"]:
@@ -317,40 +319,70 @@ def api_chat(data: ChatRequest, current_coach: dict = Depends(get_current_coach)
             elif msg.role == "assistant":
                 chat_history.append(AIMessage(content=msg.content))
 
-    try:
-        # Instantiate agent executor dynamically for the logged-in coach
-        agent_executor = build_agent_executor(current_coach["id"], data.selected_team_id)
-        
-        result = agent_executor.invoke({
-            "input": data.question,
-            "chat_history": chat_history
-        })
-        
-        # Extract source documents from intermediate steps if search_playbook was called
-        sources = []
-        if "intermediate_steps" in result:
-            for action, observation in result["intermediate_steps"]:
-                if action.tool == "search_playbook":
-                    sources.append("softball_playbook")
-        
-        return {
-            "answer": result["output"],
-            "sources": list(set(sources))
-        }
-    except Exception as e:
-        # Fallback to the classic RAG chain if agent execution fails
-        print(f"Agent execution failed, falling back to RAG chain: {e}")
-        
-        # Simple non-streaming wrapper fallback
-        result = chain.invoke({
-            "question": data.question,
-            "chat_history": chat_history,
-            "profile_context": profile_context
-        })
-        return {
-            "answer": result["answer"],
-            "sources": [doc.metadata.get("source", "Unknown").split('/')[-1] for doc in result.get("source_documents", [])]
-        }
+    async def event_generator():
+        try:
+            # Instantiate agent executor dynamically for the logged-in coach
+            agent_executor = build_agent_executor(current_coach["id"], data.selected_team_id)
+            
+            # Use astream_events to capture both tool usage and final answer streaming
+            async for event in agent_executor.astream_events(
+                {"input": data.question, "chat_history": chat_history},
+                version="v2"
+            ):
+                event_type = event["event"]
+                name = event["name"]
+                
+                if event_type == "on_chat_model_stream":
+                    content = event["data"]["chunk"].content
+                    if content:
+                        yield {
+                            "event": "message",
+                            "data": json.dumps({"type": "token", "text": content})
+                        }
+                elif event_type == "on_tool_start":
+                    yield {
+                        "event": "message",
+                        "data": json.dumps({"type": "tool_start", "tool": name})
+                    }
+                elif event_type == "on_tool_end":
+                    yield {
+                        "event": "message",
+                        "data": json.dumps({"type": "tool_end", "tool": name})
+                    }
+        except Exception as e:
+            # Fallback to the classic RAG chain if agent execution fails
+            print(f"Agent execution failed, falling back to RAG chain: {e}")
+            try:
+                # Use astream_events for the fallback chain
+                async for event in chain.astream_events(
+                    {
+                        "question": data.question,
+                        "chat_history": chat_history,
+                        "profile_context": profile_context
+                    },
+                    version="v2"
+                ):
+                    event_type = event["event"]
+                    if event_type == "on_chat_model_stream":
+                        content = event["data"]["chunk"].content
+                        if content:
+                            yield {
+                                "event": "message",
+                                "data": json.dumps({"type": "token", "text": content})
+                            }
+                    elif event_type == "on_retriever_end":
+                        yield {
+                            "event": "message",
+                            "data": json.dumps({"type": "tool_end", "tool": "search_playbook"})
+                        }
+            except Exception as fallback_err:
+                print(f"Fallback RAG chain failed: {fallback_err}")
+                yield {
+                    "event": "error",
+                    "data": json.dumps({"detail": str(fallback_err)})
+                }
+                
+    return EventSourceResponse(event_generator())
 
 # 4. Team Management API Routes
 @app.post("/api/teams")
