@@ -910,10 +910,8 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                                     ? (p.singles + p.doubles + p.triples + p.home_runs + p.walks + p.hit_by_pitches) / (p.at_bats + p.walks + p.hit_by_pitches) 
                                                     : 0.000;
 
-
-
-                                                const era = p.innings_pitched > 0 ? (p.earned_runs * 7) / p.innings_pitched : 0.00;
-                                                const whip = p.innings_pitched > 0 ? (p.hits_allowed + p.walks_allowed) / p.innings_pitched : 0.00;
+                                                const era = p.era ?? 0.00;
+                                                const whip = p.whip ?? 0.00;
 
                                                 const fpct = p.total_chances > 0 ? (p.putouts + p.assists) / p.total_chances : 1.000;
                                                 const cs_pct = (p.runners_stolen_bases + p.runners_caught_stealing) > 0 
@@ -1035,9 +1033,15 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                         </thead>
                                         <tbody>
                                             {importPreview.map((p, idx) => {
+                                                const inningsPerGame = teams.find(t => t.id === selectedTeamId)?.innings_per_game || 7;
                                                 const h = p.singles + p.doubles + p.triples + p.home_runs;
                                                 const avg = p.at_bats > 0 ? h / p.at_bats : 0.000;
-                                                const era = p.innings_pitched > 0 ? (p.earned_runs * 7) / p.innings_pitched : 0.00;
+                                                
+                                                // Convert fractional innings (e.g. 29.2 -> 29.667)
+                                                const whole = Math.floor(p.innings_pitched);
+                                                const fraction = Math.round((p.innings_pitched - whole) * 10) / 10;
+                                                const actualIp = fraction === 0.1 ? whole + 0.333 : fraction === 0.2 ? whole + 0.667 : whole;
+                                                const era = actualIp > 0 ? (p.earned_runs * inningsPerGame) / actualIp : 0.00;
 
                                                 return (
                                                     <tr key={idx} style={{ borderBottom: '1px solid var(--border)' }}>
