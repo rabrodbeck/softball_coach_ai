@@ -7,6 +7,7 @@ interface Player {
     player_name: string;
     player_number: number;
     innings_per_game?: number;
+    eligible_positions?: string;
 }
 
 interface LineupCreatorModalProps {
@@ -43,6 +44,7 @@ export default function LineupCreatorModal({ teamId, teamName, inningsPerGame, o
     const [attendance, setAttendance] = useState<Record<number, boolean>>({});
     
     const [assignments, setAssignments] = useState<Record<number, Record<string, number | null>>>({});
+    const [draggedPlayerId, setDraggedPlayerId] = useState<number | null>(null);
 
     // Fetch team players on load
     useEffect(() => {
@@ -107,6 +109,18 @@ export default function LineupCreatorModal({ teamId, teamName, inningsPerGame, o
     const getPlayerById = (id: number | null) => {
         if (id === null) return null;
         return players.find(p => p.id === id) || null;
+    };
+
+    const isPlayerEligible = (player: Player | null, positionKey: string) => {
+        if (!player) return false;
+        const eligibleStr = player.eligible_positions || 'P,C,1B,2B,3B,SS,LF,CF,RF';
+        const eligibleList = eligibleStr.split(',').map(s => s.trim().toUpperCase());
+        return eligibleList.includes(positionKey.toUpperCase());
+    };
+
+    const handleDragStart = (e: React.DragEvent, playerId: number, inningIndex: number, sourceKey: string | null) => {
+        setDraggedPlayerId(playerId);
+        e.dataTransfer.setData("text/plain", JSON.stringify({ playerId, sourceInning: inningIndex, sourceKey }));
     };
 
     // Handle dropping a player onto a grid cell
@@ -221,7 +235,7 @@ export default function LineupCreatorModal({ teamId, teamName, inningsPerGame, o
                 ) : (
                     <div style={{ display: 'flex', gap: '16px', flex: 1, minHeight: 0, overflow: 'hidden' }}>
                         {/* Left Panel: Game Config & Attendance */}
-                        <div style={{ width: '320px', display: 'flex', flexDirection: 'column', gap: '12px', flexShrink: 0, overflowY: 'auto', paddingRight: '4px' }}>
+                        <div style={{ width: '220px', display: 'flex', flexDirection: 'column', gap: '12px', flexShrink: 0, overflowY: 'auto', paddingRight: '4px' }}>
                             {/* Game Configuration Panel */}
                             <div style={{ 
                                 display: 'flex', 
@@ -256,7 +270,7 @@ export default function LineupCreatorModal({ teamId, teamName, inningsPerGame, o
                                 <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-h)', fontWeight: 'bold', marginBottom: '8px' }}>
                                     ATTENDANCE ({availablePlayers.length} / {players.length} Available)
                                 </label>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '6px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                                     {[...players].sort((a, b) => a.player_name.localeCompare(b.player_name)).map(p => {
                                         const isAttending = attendance[p.id] !== false;
                                         return (
@@ -357,6 +371,15 @@ export default function LineupCreatorModal({ teamId, teamName, inningsPerGame, o
                                             {Array.from({ length: inningsCount }).map((_, inningIdx) => {
                                                 const assignedPlayerId = assignments[inningIdx]?.[pos.key] || null;
                                                 const assignedPlayer = getPlayerById(assignedPlayerId);
+                                                const draggedPlayer = getPlayerById(draggedPlayerId);
+                                                const isEligible = draggedPlayer ? isPlayerEligible(draggedPlayer, pos.key) : false;
+
+                                                let cellBorderColor = assignedPlayer ? 'var(--accent)' : 'var(--border)';
+                                                let cellBackground = assignedPlayer ? 'var(--accent-bg)' : 'transparent';
+                                                if (draggedPlayer) {
+                                                    cellBorderColor = isEligible ? '#10b981' : '#ef4444';
+                                                    cellBackground = isEligible ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)';
+                                                }
                                                 return (
                                                     <td 
                                                         key={inningIdx} 
@@ -376,8 +399,8 @@ export default function LineupCreatorModal({ teamId, teamName, inningsPerGame, o
                                                             minHeight: '26px',
                                                             borderRadius: '6px',
                                                             border: '1px dashed',
-                                                            borderColor: assignedPlayer ? 'var(--accent)' : 'var(--border)',
-                                                            background: assignedPlayer ? 'var(--accent-bg)' : 'transparent',
+                                                            borderColor: cellBorderColor,
+                                                            background: cellBackground,
                                                             display: 'flex',
                                                             alignItems: 'center',
                                                             justifyContent: 'center',
@@ -389,6 +412,7 @@ export default function LineupCreatorModal({ teamId, teamName, inningsPerGame, o
                                                                 <div 
                                                                     draggable
                                                                     onDragStart={(e) => handleDragStart(e, assignedPlayer.id, inningIdx, pos.key)}
+                                                                    onDragEnd={() => setDraggedPlayerId(null)}
                                                                     style={{
                                                                         width: '100%',
                                                                         padding: '3px 6px',
@@ -489,6 +513,7 @@ export default function LineupCreatorModal({ teamId, teamName, inningsPerGame, o
                                                                 <div 
                                                                     draggable
                                                                     onDragStart={(e) => handleDragStart(e, assignedPlayer.id, inningIdx, benchKey)}
+                                                                    onDragEnd={() => setDraggedPlayerId(null)}
                                                                     style={{
                                                                         width: '100%',
                                                                         padding: '3px 6px',
@@ -585,12 +610,13 @@ export default function LineupCreatorModal({ teamId, teamName, inningsPerGame, o
                                                         }
                                                     }}
                                                 >
-                                                    <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: '4px', minHeight: '30px', justifyContent: 'center', alignItems: 'center' }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minHeight: '30px', alignItems: 'stretch' }}>
                                                         {unassigned.map(p => (
                                                             <div 
                                                                 key={p.id}
                                                                 draggable
                                                                 onDragStart={(e) => handleDragStart(e, p.id, inningIdx, null)}
+                                                                onDragEnd={() => setDraggedPlayerId(null)}
                                                                 style={{
                                                                     padding: '3px 6px',
                                                                     background: 'var(--accent-bg)',
@@ -603,7 +629,9 @@ export default function LineupCreatorModal({ teamId, teamName, inningsPerGame, o
                                                                     cursor: 'grab',
                                                                     boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
                                                                     transition: 'all 0.15s',
-                                                                    whiteSpace: 'nowrap'
+                                                                    whiteSpace: 'nowrap',
+                                                                    width: '100%',
+                                                                    boxSizing: 'border-box'
                                                                 }}
                                                             >
                                                                 {p.player_name} #{p.player_number}
@@ -668,8 +696,4 @@ export default function LineupCreatorModal({ teamId, teamName, inningsPerGame, o
         </div>
     );
 }
-
-// Drag helper function
-const handleDragStart = (e: React.DragEvent, playerId: number, inningIndex: number, sourceKey: string | null) => {
-    e.dataTransfer.setData("text/plain", JSON.stringify({ playerId, sourceInning: inningIndex, sourceKey }));
-};
+
