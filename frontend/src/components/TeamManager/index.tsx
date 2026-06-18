@@ -681,7 +681,9 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                                 <th style={{ padding: '8px 10px' }}>AB</th>
                                                 <th style={{ padding: '8px 10px' }}>H</th>
                                                 <th style={{ padding: '8px 10px' }}>HR</th>
+                                                <th style={{ padding: '8px 10px' }}>ROE</th>
                                                 <th style={{ padding: '8px 10px' }}>AVG</th>
+                                                <th style={{ padding: '8px 10px' }}>OBP</th>
                                                 <th style={{ padding: '8px 10px' }}>IP (Pit)</th>
                                                 <th style={{ padding: '8px 10px' }}>ERA</th>
                                                 <th style={{ padding: '8px 10px' }}>TC (Fld)</th>
@@ -693,6 +695,12 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                             {importPreview.map((p, idx) => {
                                                 const h = p.singles + p.doubles + p.triples + p.home_runs;
                                                 const avg = p.at_bats > 0 ? h / p.at_bats : 0.000;
+                                                
+                                                // OBP = (Singles + Doubles + Triples + HR + BB + HBP + ROE) / (AB + BB + HBP + ROE)
+                                                const obpDenom = p.at_bats + p.walks + p.hit_by_pitches + (p.reached_on_error || 0);
+                                                const obp = obpDenom > 0 
+                                                    ? (h + p.walks + p.hit_by_pitches + (p.reached_on_error || 0)) / obpDenom 
+                                                    : 0.000;
                                                 
                                                 const whole = Math.floor(p.innings_pitched);
                                                 const fraction = Math.round((p.innings_pitched - whole) * 10) / 10;
@@ -714,7 +722,9 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                                         <td style={{ padding: '8px 10px' }}>{p.at_bats}</td>
                                                         <td style={{ padding: '8px 10px' }}>{h}</td>
                                                         <td style={{ padding: '8px 10px' }}>{p.home_runs}</td>
+                                                        <td style={{ padding: '8px 10px' }}>{p.reached_on_error || 0}</td>
                                                         <td style={{ padding: '8px 10px', fontWeight: 'bold' }}>{avg.toFixed(3)}</td>
+                                                        <td style={{ padding: '8px 10px', fontWeight: 'bold' }}>{obp.toFixed(3)}</td>
                                                         <td style={{ padding: '8px 10px' }}>{p.innings_pitched.toFixed(1)}</td>
                                                         <td style={{ padding: '8px 10px' }}>{era.toFixed(2)}</td>
                                                         <td style={{ padding: '8px 10px' }}>{p.total_chances}</td>
