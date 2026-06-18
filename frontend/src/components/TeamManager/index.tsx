@@ -696,10 +696,10 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                                 const h = p.singles + p.doubles + p.triples + p.home_runs;
                                                 const avg = p.at_bats > 0 ? h / p.at_bats : 0.000;
                                                 
-                                                // OBP = (Singles + Doubles + Triples + HR + BB + HBP + ROE) / (AB + BB + HBP + ROE)
-                                                const obpDenom = p.at_bats + p.walks + p.hit_by_pitches + (p.reached_on_error || 0);
+                                                // OBP = (Singles + Doubles + Triples + HR + BB + HBP) / (AB + BB + HBP)
+                                                const obpDenom = p.at_bats + p.walks + p.hit_by_pitches;
                                                 const obp = obpDenom > 0 
-                                                    ? (h + p.walks + p.hit_by_pitches + (p.reached_on_error || 0)) / obpDenom 
+                                                    ? (h + p.walks + p.hit_by_pitches) / obpDenom 
                                                     : 0.000;
                                                 
                                                 const whole = Math.floor(p.innings_pitched);

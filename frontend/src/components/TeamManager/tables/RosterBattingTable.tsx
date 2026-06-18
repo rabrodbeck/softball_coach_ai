@@ -12,8 +12,8 @@ export function RosterBattingTable({ players }: RosterBattingTableProps) {
         const hits = p.singles + p.doubles + p.triples + p.home_runs;
         const reachedOnError = p.reached_on_error || 0;
         const battingAvg = p.at_bats > 0 ? hits / p.at_bats : 0.000;
-        const obpDenom = p.at_bats + p.walks + p.hit_by_pitches + reachedOnError;
-        const onBasePct = obpDenom > 0 ? (hits + p.walks + p.hit_by_pitches + reachedOnError) / obpDenom : 0.000;
+        const obpDenom = p.at_bats + p.walks + p.hit_by_pitches;
+        const onBasePct = obpDenom > 0 ? (hits + p.walks + p.hit_by_pitches) / obpDenom : 0.000;
 
         return (
           <React.Fragment key={p.id}>
