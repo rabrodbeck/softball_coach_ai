@@ -251,7 +251,7 @@ export function PlayerForm({
     // 2. Edit Player Details & Stats Form
     if (editingPlayer) {
         return (
-            <form onSubmit={onUpdatePlayer} className="add-team-form" style={{ maxHeight: '450px', overflowY: 'auto', paddingRight: '8px' }}>
+            <form onSubmit={onUpdatePlayer} className="add-team-form">
                 <h3>Edit Player & Stats</h3>
                 <div className="form-row-double" style={{ display: 'flex', gap: '12px' }}>
                     <div className="input-group" style={{ flex: 2 }}>

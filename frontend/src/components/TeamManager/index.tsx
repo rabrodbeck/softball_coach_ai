@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Plus, Users, Edit2, Lock, Upload } from 'lucide-react';
+import { X, Plus, Users, Pencil, Lock, Upload } from 'lucide-react';
 import type { Team, Player, TeamManagerProps } from './types';
 
 import { useTeamStore } from '../../store/useTeamStore';
@@ -362,31 +362,40 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                 <div 
                                     key={team.id} 
                                     onClick={() => handleSelectActiveTeam(team)}
-                                    className={`team-item ${team.id === selectedTeamId ? 'active' : ''}`}
+                                    className={`team-card ${team.id === selectedTeamId ? 'active' : ''}`}
                                     style={{
-                                        padding: '12px',
+                                        padding: '16px',
                                         borderRadius: '8px',
                                         cursor: 'pointer',
-                                        marginBottom: '6px',
-                                        background: team.id === selectedTeamId ? 'var(--card-bg)' : 'transparent',
-                                        border: `1px solid ${team.id === selectedTeamId ? 'var(--border)' : 'transparent'}`,
+                                        marginBottom: '12px',
+                                        background: team.id === selectedTeamId ? 'var(--accent-bg)' : 'var(--bg)',
+                                        border: team.id === selectedTeamId ? '2px solid var(--accent)' : '1px solid var(--border)',
                                         display: 'flex',
                                         justifyContent: 'space-between',
-                                        alignItems: 'center'
+                                        alignItems: 'center',
+                                        transition: 'all 0.2s ease'
                                     }}
                                 >
                                     <div>
                                         <div style={{ fontWeight: '600', color: team.id === selectedTeamId ? 'var(--text-h)' : 'var(--text-p)' }}>{team.team_name}</div>
-                                        <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>{team.season} • {team.age_group}</div>
+                                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>{team.season} • {team.age_group}</div>
                                     </div>
-                                    {team.role === 'Head Coach' && (
-                                        <button 
-                                            onClick={(e) => startEditingTeam(team, e)} 
-                                            style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px' }}
-                                        >
-                                            <Edit2 size={13} />
-                                        </button>
-                                    )}
+                                    <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                                        <div className="team-stats" style={{ display: 'flex', gap: '8px', fontSize: '13px', fontWeight: 'bold' }}>
+                                            <span style={{ color: '#22c55e' }}>{team.wins}W</span>
+                                            <span style={{ color: '#ef4444' }}>{team.losses}L</span>
+                                            <span style={{ color: '#94a3b8' }}>{team.ties}T</span>
+                                        </div>
+                                        {team.role === 'Head Coach' && (
+                                            <button 
+                                                onClick={(e) => startEditingTeam(team, e)} 
+                                                className="btn-edit-team-pencil"
+                                                style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center' }}
+                                            >
+                                                <Pencil size={15} />
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             ))}
                         </div>
@@ -400,7 +409,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                             <TeamForm 
                                 coachId={coachId}
                                 editingTeam={editingTeam}
-                                showAddForm={showTeamForm}
+                                showAddForm={showTeamForm && !editingTeam}
                                 cancelForms={cancelForms}
                                 teamName={teamName}
                                 setTeamName={setTeamName}
@@ -425,7 +434,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                         ) : showPlayerForm ? (
                             <PlayerForm 
                                 editingPlayer={editingPlayer}
-                                showAddPlayerForm={showPlayerForm}
+                                showAddPlayerForm={showPlayerForm && !editingPlayer}
                                 cancelForms={cancelForms}
                                 teams={teams}
                                 selectedTeamId={selectedTeamId}
