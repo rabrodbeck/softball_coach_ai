@@ -131,6 +131,7 @@ class PlayerUpdateRequest(BaseModel):
     caught_stealing: int
     runs_scored: int
     runs_batted_in: int
+    reached_on_error: int = 0
     # Pitching stats
     games_pitched: int = 0
     games_started: int = 0
@@ -191,6 +192,7 @@ class BulkImportPlayer(BaseModel):
     caught_stealing: int
     runs_scored: int
     runs_batted_in: int
+    reached_on_error: int = 0
     
     # Pitching stats
     games_pitched: int

@@ -34,6 +34,7 @@ export interface Player {
     caught_stealing: number;
     runs_scored: number;
     runs_batted_in: number;
+    reached_on_error: number;
     batting_average: number;
     on_base_percentage: number;
     created_at: string;

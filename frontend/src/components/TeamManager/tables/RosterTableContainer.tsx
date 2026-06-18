@@ -98,6 +98,9 @@ export function RosterTableContainer({
                   <th onClick={() => handleSort('stolen_bases')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
                     SB {sortField === 'stolen_bases' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>
+                  <th onClick={() => handleSort('reached_on_error')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
+                    ROE {sortField === 'reached_on_error' && (sortDirection === 'asc' ? '↑' : '↓')}
+                  </th>
                   <th onClick={() => handleSort('batting_average')} style={{ padding: '10px 12px', cursor: 'pointer', userSelect: 'none' }}>
                     AVG {sortField === 'batting_average' && (sortDirection === 'asc' ? '↑' : '↓')}
                   </th>

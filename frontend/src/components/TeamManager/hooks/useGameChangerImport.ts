@@ -210,6 +210,7 @@ export function useGameChangerImport({
                     caught_stealing: getBattingVal(["CS", "CAUGHTSTEALING"]),
                     runs_scored: getBattingVal(["R", "RUNS", "RUNSSCORED"]),
                     runs_batted_in: getBattingVal(["RBI", "RBIS", "RUNSBATTEDIN"]),
+                    reached_on_error: getBattingVal(["ROE", "REACHEDONERROR"]),
 
                     // Pitching stats mapping (from column BC / index 54 onwards)
                     games_pitched: getPitchingVal(["GP", "G", "GAMES", "GAMESPITCHED"]),

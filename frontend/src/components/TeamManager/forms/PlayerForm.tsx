@@ -51,6 +51,8 @@ interface PlayerFormProps {
     setRunsScored: (val: number) => void;
     rbi: number;
     setRbi: (val: number) => void;
+    reachedOnError: number;
+    setReachedOnError: (val: number) => void;
 
     // Pitching Stats Fields
     gamesPitched: number;
@@ -145,6 +147,8 @@ export function PlayerForm({
     setRunsScored,
     rbi,
     setRbi,
+    reachedOnError,
+    setReachedOnError,
     gamesPitched,
     setGamesPitched,
     gamesStarted,
@@ -355,6 +359,10 @@ export function PlayerForm({
                     <div className="input-group">
                         <label>Caught Stealing</label>
                         <input type="number" value={cs} onChange={(e) => setCs(parseInt(e.target.value) || 0)} />
+                    </div>
+                    <div className="input-group">
+                        <label>Reached on Error (ROE)</label>
+                        <input type="number" value={reachedOnError} onChange={(e) => setReachedOnError(parseInt(e.target.value) || 0)} />
                     </div>
                 </div>
 

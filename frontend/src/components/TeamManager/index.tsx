@@ -76,6 +76,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
     const [cs, setCs] = useState(0);
     const [runsScored, setRunsScored] = useState(0);
     const [rbi, setRbi] = useState(0);
+    const [reachedOnError, setReachedOnError] = useState(0);
     const [gamesPitched, setGamesPitched] = useState(0);
     const [gamesStarted, setGamesStarted] = useState(0);
     const [inningsPitched, setInningsPitched] = useState(0.0);
@@ -171,6 +172,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
         setCs(0);
         setRunsScored(0);
         setRbi(0);
+        setReachedOnError(0);
         setGamesPitched(0);
         setGamesStarted(0);
         setInningsPitched(0.0);
@@ -237,6 +239,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
             caught_stealing: cs,
             runs_scored: runsScored,
             runs_batted_in: rbi,
+            reached_on_error: reachedOnError,
             games_pitched: gamesPitched,
             games_started: gamesStarted,
             innings_pitched: inningsPitched,
@@ -300,6 +303,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
         setCs(player.caught_stealing);
         setRunsScored(player.runs_scored);
         setRbi(player.runs_batted_in);
+        setReachedOnError(player.reached_on_error || 0);
         setGamesPitched(player.games_pitched);
         setGamesStarted(player.games_started);
         setInningsPitched(player.innings_pitched);
@@ -476,6 +480,8 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                 setRunsScored={setRunsScored}
                                 rbi={rbi}
                                 setRbi={setRbi}
+                                reachedOnError={reachedOnError}
+                                setReachedOnError={setReachedOnError}
                                 gamesPitched={gamesPitched}
                                 setGamesPitched={setGamesPitched}
                                 gamesStarted={gamesStarted}

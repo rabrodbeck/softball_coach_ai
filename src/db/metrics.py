@@ -105,11 +105,12 @@ def calculate_derived_stats(player: dict):
     ab = player.get("at_bats", 0)
     avg = hits / ab if ab > 0 else 0.0
 
-    # 3. Calculate on base percentage ((hits + walks + hbp) / plate appearances)
+    # 3. Calculate on base percentage: (singles+doubles+triples+home runs+walks+hit by pitches+reached on error) / (at bats+walks+hit by pitches+reached on error)
     bb = player.get("walks", 0)
     hbp = player.get("hit_by_pitches", 0)
-    pa = player.get("plate_appearances", 0)
-    obp = (hits + bb + hbp) / pa if pa > 0 else 0.0
+    roe = player.get("reached_on_error", 0)
+    obp_denom = ab + bb + hbp + roe
+    obp = (hits + bb + hbp + roe) / obp_denom if obp_denom > 0 else 0.0
 
     # 4. Calculate slugging percentage
     slg = (singles + 2 * doubles + 3 * triples + 4 * home_runs) / ab if ab > 0 else 0.0

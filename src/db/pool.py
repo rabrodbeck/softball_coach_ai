@@ -82,6 +82,10 @@ def init_db():
                    ALTER TABLE players 
                    ADD COLUMN IF NOT EXISTS eligible_positions VARCHAR(255) DEFAULT 'P,C,1B,2B,SS,3B,LF,CF,RF';
                    """)
+    cursor.execute("""
+                   ALTER TABLE offensive_stats 
+                   ADD COLUMN IF NOT EXISTS reached_on_error INTEGER DEFAULT 0;
+                   """)
     
     cursor.execute("""
                     CREATE TABLE IF NOT EXISTS lineups (

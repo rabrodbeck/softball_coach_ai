@@ -83,6 +83,7 @@ def get_team_players(team_id: int):
                 COALESCE(o.caught_stealing, 0) as caught_stealing,
                 COALESCE(o.runs_scored, 0) as runs_scored,
                 COALESCE(o.runs_batted_in, 0) as runs_batted_in,
+                COALESCE(o.reached_on_error, 0) as reached_on_error,
                 COALESCE(p_stats.games_pitched, 0) as games_pitched,
                 COALESCE(p_stats.games_started, 0) as games_started,
                 COALESCE(p_stats.innings_pitched, 0.0) as innings_pitched,
@@ -174,15 +175,16 @@ def update_player_stats(coach_id: int, player_id: int, stats: dict):
                 singles, doubles, triples, home_runs,
                 walks, strikeouts, hit_by_pitches,
                 stolen_bases, caught_stealing,
-                runs_scored, runs_batted_in, updated_at
+                runs_scored, runs_batted_in, reached_on_error, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
             ON CONFLICT (player_id) DO UPDATE
             SET plate_appearances = EXCLUDED.plate_appearances, at_bats = EXCLUDED.at_bats,
                 singles = EXCLUDED.singles, doubles = EXCLUDED.doubles, triples = EXCLUDED.triples, home_runs = EXCLUDED.home_runs,
                 walks = EXCLUDED.walks, strikeouts = EXCLUDED.strikeouts, hit_by_pitches = EXCLUDED.hit_by_pitches,
                 stolen_bases = EXCLUDED.stolen_bases, caught_stealing = EXCLUDED.caught_stealing,
-                runs_scored = EXCLUDED.runs_scored, runs_batted_in = EXCLUDED.runs_batted_in, updated_at = CURRENT_TIMESTAMP
+                runs_scored = EXCLUDED.runs_scored, runs_batted_in = EXCLUDED.runs_batted_in,
+                reached_on_error = EXCLUDED.reached_on_error, updated_at = CURRENT_TIMESTAMP
             RETURNING *;
             """,
             (
@@ -190,7 +192,7 @@ def update_player_stats(coach_id: int, player_id: int, stats: dict):
                 stats["singles"], stats["doubles"], stats["triples"], stats["home_runs"],
                 stats["walks"], stats["strikeouts"], stats["hit_by_pitches"],
                 stats["stolen_bases"], stats["caught_stealing"],
-                stats["runs_scored"], stats["runs_batted_in"]
+                stats["runs_scored"], stats["runs_batted_in"], stats.get("reached_on_error", 0)
             )
         )
         stats_row = cursor.fetchone()
@@ -395,9 +397,9 @@ def bulk_update_player_stats(coach_id: int, team_id: int, updates: list):
                     singles, doubles, triples, home_runs,
                     walks, strikeouts, hit_by_pitches,
                     stolen_bases, caught_stealing,
-                    runs_scored, runs_batted_in, updated_at
+                    runs_scored, runs_batted_in, reached_on_error, updated_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
                 ON CONFLICT (player_id) DO UPDATE
                 SET plate_appearances = EXCLUDED.plate_appearances,
                     at_bats = EXCLUDED.at_bats,
@@ -412,6 +414,7 @@ def bulk_update_player_stats(coach_id: int, team_id: int, updates: list):
                     caught_stealing = EXCLUDED.caught_stealing,
                     runs_scored = EXCLUDED.runs_scored,
                     runs_batted_in = EXCLUDED.runs_batted_in,
+                    reached_on_error = EXCLUDED.reached_on_error,
                     updated_at = CURRENT_TIMESTAMP
                 RETURNING *;
                 """,
@@ -420,7 +423,7 @@ def bulk_update_player_stats(coach_id: int, team_id: int, updates: list):
                     p["singles"], p["doubles"], p["triples"], p["home_runs"],
                     p["walks"], p["strikeouts"], p["hit_by_pitches"],
                     p["stolen_bases"], p["caught_stealing"],
-                    p["runs_scored"], p["runs_batted_in"]
+                    p["runs_scored"], p["runs_batted_in"], p.get("reached_on_error", 0)
                 )
             )
             stats_row = cursor.fetchone()

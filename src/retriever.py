@@ -160,7 +160,7 @@ def build_agent_executor(coach_id: int, selected_team_id: int | None = None):
                     f"BBK_Ratio={p.get('bb_k_ratio', 0.0):.2f}, SB_PCT={p.get('stolen_base_percentage', 0.0):.3f}, "
                     f"HR={p.get('home_runs', 0)}, RBI={p.get('runs_batted_in', 0)}, "
                     f"R={p.get('runs_scored', 0)}, BB={p.get('walks', 0)}, SO={p.get('strikeouts', 0)}, "
-                    f"HBP={p.get('hit_by_pitches', 0)}, SB={p.get('stolen_bases', 0)}, CS={p.get('caught_stealing', 0)}, "
+                    f"HBP={p.get('hit_by_pitches', 0)}, ROE={p.get('reached_on_error', 0)}, SB={p.get('stolen_bases', 0)}, CS={p.get('caught_stealing', 0)}, "
                     f"1B={p.get('singles', 0)}, 2B={p.get('doubles', 0)}, 3B={p.get('triples', 0)}"
                 )
                 
