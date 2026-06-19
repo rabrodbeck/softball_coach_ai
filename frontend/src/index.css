@@ -358,6 +358,7 @@ code {
   justify-content: center;
   box-shadow: var(--shadow);
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .avatar-img {
