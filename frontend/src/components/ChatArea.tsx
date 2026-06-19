@@ -201,7 +201,7 @@ export default function ChatArea({ userProfile, selectedTeamId }: ChatAreaProps)
                   return (
                     <div key={idx} className={`chat-message ${msg.role}`}>
                       <div className="message-avatar">
-                        {msg.role === 'user' ? '🧢' : <img src="/winnie-avatar.png?v=3" alt="Winnie" className="avatar-img" />}
+                        {msg.role === 'user' ? '🧢' : <img src="/winnie-avatar.png?v=4" alt="Winnie" className="avatar-img" />}
                       </div>
                       <div className="message-content-wrapper">
                         <div className="message-text">
@@ -234,7 +234,7 @@ export default function ChatArea({ userProfile, selectedTeamId }: ChatAreaProps)
                 {generating && messages[messages.length - 1]?.content === "" && (
                   <div className="chat-message assistant generating">
                     <div className="message-avatar">
-                      <img src="/winnie-avatar.png?v=3" alt="Winnie" className="avatar-img" />
+                      <img src="/winnie-avatar.png?v=4" alt="Winnie" className="avatar-img" />
                     </div>
                     <div className="spinner-wrapper">
                       <div className="spinner"></div>

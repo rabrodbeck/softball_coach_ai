@@ -236,7 +236,7 @@ export default function AuthPortal({ onLoginSuccess, onContinueAsGuest }: AuthPo
         <div className="auth-portal-container">
             <div className="auth-card">
                 <div className="auth-header">
-                    <img src="/winnie-avatar.png?v=3" alt="Winnie" className="auth-logo-img" />
+                    <img src="/winnie-avatar.png?v=4" alt="Winnie" className="auth-logo-img" />
                     <h2 style={{ marginBottom: '4px' }}>Winnie</h2>
                     <p style={{ marginTop: '0', color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '16px' }}>Dugout Command Center</p>
                     <p style={{ fontSize: '14px', opacity: 0.85 }}>Access your playbook files or explore coaching strategies.</p>
