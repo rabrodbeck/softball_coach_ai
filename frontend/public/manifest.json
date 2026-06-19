@@ -1,10 +1,10 @@
 {
-    "short_name": "Coach AI",
-    "name": "🥎 Softball Coach AI Assistant",
+    "short_name": "Winnie",
+    "name": "Winnie - Softball Coach AI Assistant",
     "icons": [
         {
-            "src": "/favicon.svg",
-            "type": "image/svg+xml",
+            "src": "/favicon.png",
+            "type": "image/png",
             "sizes": "any"
         }
     ],

@@ -121,7 +121,7 @@ function App() {
             <Menu size={20} />
           </button>
           <Trophy className='icon-gold' />
-          <h1>Softball Coach AI</h1>
+          <h1>Winnie</h1>
         </div>
         <div className='header-user'>
           {user && (

@@ -236,7 +236,7 @@ export default function AuthPortal({ onLoginSuccess, onContinueAsGuest }: AuthPo
         <div className="auth-portal-container">
             <div className="auth-card">
                 <div className="auth-header">
-                    <span className="auth-logo">🥎</span>
+                    <img src="/winnie-avatar.png" alt="Winnie" className="auth-logo-img" />
                     <h2>Dugout Command Center</h2>
                     <p>Access your playbook files or explore coaching strategies.</p>
                 </div>
