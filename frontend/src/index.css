@@ -848,3 +848,45 @@ code {
   align-items: center;
 }
 
+/* --- Team Workspace Manager Mobile Master-Detail --- */
+.btn-mobile-back {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  color: var(--text-h);
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.btn-mobile-back:hover {
+  background: var(--border);
+}
+
+@media (max-width: 768px) {
+  .btn-mobile-back.visible {
+    display: flex !important;
+  }
+
+  .team-manager-sidebar.mobile-hidden,
+  .team-manager-main.mobile-hidden {
+    display: none !important;
+  }
+
+  .team-manager-sidebar.mobile-visible,
+  .team-manager-main.mobile-visible {
+    display: flex !important;
+    width: 100% !important;
+    flex: 1 !important;
+    border-right: none !important;
+  }
+
+  .team-manager-main {
+    padding: 16px !important;
+  }
+}
+
+

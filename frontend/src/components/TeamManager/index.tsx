@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Plus, Users, Pencil, Lock, Upload } from 'lucide-react';
+import { X, Plus, Users, Pencil, Lock, Upload, ArrowLeft } from 'lucide-react';
 import type { Team, Player, TeamManagerProps } from './types';
 
 import { useTeamStore } from '../../store/useTeamStore';
@@ -36,6 +36,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
 
     // UI state
     const [subView, setSubView] = useState<SubViewType>('batting');
+    const [mobileActiveView, setMobileActiveView] = useState<'list' | 'detail'>(selectedTeamId ? 'detail' : 'list');
     const [showTeamForm, setShowTeamForm] = useState(false);
     const [editingTeam, setEditingTeam] = useState<Team | null>(null);
     const [showPlayerForm, setShowPlayerForm] = useState(false);
@@ -121,6 +122,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
         setSelectedTeamId(team.id);
         setUserRole(team.role || null);
         onSelectTeam(team);
+        setMobileActiveView('detail');
     };
 
     // Instantiate hook for CSV uploads
@@ -338,6 +340,13 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                 {/* Header */}
                 <div className="team-manager-header">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <button 
+                            className={`btn-mobile-back ${mobileActiveView === 'detail' ? 'visible' : ''}`}
+                            onClick={() => setMobileActiveView('list')}
+                            title="Back to teams list"
+                        >
+                            <ArrowLeft size={20} />
+                        </button>
                         <Users className="icon-sidebar" />
                         <h2>Team Workspace Manager</h2>
                         {userRole && (
@@ -352,7 +361,10 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                 <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
                     
                     {/* Sidebar: Teams List */}
-                    <div style={{ width: '280px', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', background: 'var(--sidebar-bg)' }}>
+                    <div 
+                        className={`team-manager-sidebar ${mobileActiveView === 'list' ? 'mobile-visible' : 'mobile-hidden'}`}
+                        style={{ width: '280px', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', background: 'var(--sidebar-bg)' }}
+                    >
                         <div style={{ padding: '16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <span style={{ fontWeight: 'bold', color: 'var(--text-secondary)', fontSize: '12px', textTransform: 'uppercase' }}>My Teams</span>
                             <button onClick={() => setShowTeamForm(true)} className="btn-add-team" style={{ padding: '4px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -406,7 +418,10 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                     </div>
 
                     {/* Main Area: Roster/Details */}
-                    <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                    <div 
+                        className={`team-manager-main ${mobileActiveView === 'detail' ? 'mobile-visible' : 'mobile-hidden'}`}
+                        style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px' }}
+                    >
                         
                         {/* Forms Overlay inside Main Area */}
                         {showTeamForm ? (
