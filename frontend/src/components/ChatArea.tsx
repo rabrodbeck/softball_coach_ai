@@ -18,7 +18,7 @@ export default function ChatArea({ userProfile, selectedTeamId }: ChatAreaProps)
     const [messages, setMessages] = useState<Message[]>([
         {
             role: "assistant",
-            content: "Hi! I'm Winnie. 🥎 I've got your playbook loaded and team stats ready. How can I help you coach today?"
+            content: "Hi! I'm Coach Winnie. 🥎 I've got your playbook loaded and team stats ready. How can I help you coach today?"
         }
     ]);
     const [input, setInput] = useState('');
@@ -189,8 +189,8 @@ export default function ChatArea({ userProfile, selectedTeamId }: ChatAreaProps)
             {messages.length === 0 ? (
               <div className="chat-empty-state">
                 <span className="bulletin-icon">📋</span>
-                <h3>Winnie's Whiteboard Active</h3>
-                <p>I'm Winnie, your fastpitch playbook co-pilot. Ask me about situational rules, pitching circle drills, or team rotations!</p>
+                <h3>Coach Winnie's Whiteboard Active</h3>
+                <p>I'm Coach Winnie, your fastpitch playbook co-pilot. Ask me about situational rules, pitching circle drills, or team rotations!</p>
               </div>
             ) : (
               <div className="chat-history-scroll">
@@ -238,7 +238,7 @@ export default function ChatArea({ userProfile, selectedTeamId }: ChatAreaProps)
                     </div>
                     <div className="spinner-wrapper">
                       <div className="spinner"></div>
-                      <span>Winnie is stepping up to the plate... Calculating strategy...</span>
+                      <span>Coach Winnie is stepping up to the plate... Calculating strategy...</span>
                     </div>
                   </div>
                 )}
@@ -251,7 +251,7 @@ export default function ChatArea({ userProfile, selectedTeamId }: ChatAreaProps)
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask Winnie a youth fastpitch strategy question..."
+              placeholder="Ask Coach Winnie a youth fastpitch strategy question..."
               className="chat-input-box"
               disabled={generating}
             />
