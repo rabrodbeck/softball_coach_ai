@@ -57,13 +57,24 @@ def load_documents():
 
 
 def split_documents(documents):
+    # Separate text and PDF documents
+    txt_docs = [doc for doc in documents if doc.metadata.get("source", "").endswith(".txt")]
+    pdf_docs = [doc for doc in documents if doc.metadata.get("source", "").endswith(".pdf")]
+    
+    # Split only text documents
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=800,
         chunk_overlap=150,
     )
-    chunks = text_splitter.split_documents(documents)
-    print(f"Created {len(chunks)} chunks from {len(documents)} documents")
-    return chunks
+    txt_chunks = text_splitter.split_documents(txt_docs)
+    
+    # Combine the split text chunks with the unsplit PDF page documents
+    final_chunks = txt_chunks + pdf_docs
+    
+    print(f"Created {len(txt_chunks)} chunks from {len(txt_docs)} text documents")
+    print(f"Kept {len(pdf_docs)} PDF pages as whole chunks")
+    print(f"Total database chunks: {len(final_chunks)}")
+    return final_chunks
 
 
 def build_vectorstore(chunks):
@@ -73,13 +84,14 @@ def build_vectorstore(chunks):
     # Note: PGVector expects the driver "postgresql+psycopg2" in the connection string
     connection_string = os.environ.get("DATABASE_URL", "").replace("postgresql://", "postgresql+psycopg2://")
 
-    print("⌛ Conencting to Supabase and sending vectors...this may take a moment...")
+    print("⌛ Connecting to Supabase, clearing old database, and sending vectors...this may take a moment...")
 
     vectorstore = PGVector.from_documents(
         documents=chunks,
         embedding=embeddings,
         connection_string=connection_string,
-        collection_name="softball_playbook"
+        collection_name="softball_playbook",
+        pre_delete_collection=True
     )
 
     print(f"✅ Supabase Database successfully seeded with {len(chunks)} chunks!")
