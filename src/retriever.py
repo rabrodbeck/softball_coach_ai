@@ -217,8 +217,46 @@ def build_agent_executor(coach_id: int, selected_team_id: int | None = None):
         """Searches the fastpitch softball coaching handbook and manual for drills, training advice, rules, and warmups.
         Use this tool when the user askes questions about coaching advice, pitching drills, batting tips, fielding drills, baserunning drills, or game strategies.
         """
-        docs = vectorstore.max_marginal_relevance_search(query, k=4, fetch_k=10)
-        return "\n\n".join([doc.page_content for doc in docs])
+        import re
+        docs_local = []
+        
+        # 1. Targeted search for division keywords in local rules to prevent dilution
+        division_match = re.search(r'\b(8u|10u|12u|14u)\b', query.lower())
+        if division_match:
+            division_key = division_match.group(1).upper()
+            try:
+                docs_local = vectorstore.similarity_search(
+                    division_key, 
+                    k=2, 
+                    filter={"source": "data\\raw\\rules_mrf_2026.pdf"}
+                )
+            except Exception:
+                pass
+                
+        # 2. General search in local rules
+        docs_local_general = []
+        try:
+            docs_local_general = vectorstore.similarity_search(
+                query, 
+                k=2, 
+                filter={"source": "data\\raw\\rules_mrf_2026.pdf"}
+            )
+        except Exception:
+            pass
+            
+        # 3. General search across all files (drills, national rules, etc.)
+        docs_general = vectorstore.max_marginal_relevance_search(query, k=5, fetch_k=15)
+        
+        # 4. Combine and de-duplicate
+        seen = set()
+        combined = []
+        for doc in docs_local + docs_local_general + docs_general:
+            doc_id = (doc.metadata.get("source"), doc.metadata.get("page"), doc.page_content[:50])
+            if doc_id not in seen:
+                seen.add(doc_id)
+                combined.append(doc)
+                
+        return "\n\n".join([doc.page_content for doc in combined])
 
     tools = [list_my_teams, get_team_roster, search_playbook]
 
