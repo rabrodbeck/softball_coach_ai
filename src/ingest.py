@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+from langchain_community.document_loaders import PyPDFLoader, DirectoryLoader, TextLoader
 
 load_dotenv()
 
@@ -30,14 +31,28 @@ PERSIST_DIR = "vectorstore"      # ← Changed to root level
 DATA_DIR = "data/raw"
 
 def load_documents():
-    loader = DirectoryLoader(
+    
+    # Load all txt document
+    txt_loader = DirectoryLoader(
         DATA_DIR,
         glob="**/*.txt",
         loader_cls=TextLoader,
         loader_kwargs={"encoding": "utf-8"}
     )
-    documents = loader.load()
-    print(f"Loaded {len(documents)} documents from {DATA_DIR}")
+    txt_documents = txt_loader.load()
+
+    # Load all PDF documents
+    pdf_loader = DirectoryLoader(
+        DATA_DIR,
+        glob="**/*.pdf",
+        loader_cls=PyPDFLoader
+    )
+    pdf_documents = pdf_loader.load()
+
+    # Combine all
+    documents = txt_documents + pdf_documents
+
+    print(f"Loaded {len(txt_documents)} text documents and {len(pdf_documents)} PDF documents from {DATA_DIR}")
     return documents
 
 
