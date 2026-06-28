@@ -71,6 +71,11 @@ def split_documents(documents):
     # Combine the split text chunks with the unsplit PDF page documents
     final_chunks = txt_chunks + pdf_docs
     
+    # Normalize source paths to use forward slashes for cross-platform compatibility and SQL safety
+    for chunk in final_chunks:
+        if "source" in chunk.metadata:
+            chunk.metadata["source"] = chunk.metadata["source"].replace("\\", "/")
+    
     print(f"Created {len(txt_chunks)} chunks from {len(txt_docs)} text documents")
     print(f"Kept {len(pdf_docs)} PDF pages as whole chunks")
     print(f"Total database chunks: {len(final_chunks)}")
@@ -84,7 +89,7 @@ def build_vectorstore(chunks):
     # Note: PGVector expects the driver "postgresql+psycopg2" in the connection string
     connection_string = os.environ.get("DATABASE_URL", "").replace("postgresql://", "postgresql+psycopg2://")
 
-    print("⌛ Connecting to Supabase, clearing old database, and sending vectors...this may take a moment...")
+    print("[DB] Connecting to Supabase, clearing old database, and sending vectors...this may take a moment...")
 
     vectorstore = PGVector.from_documents(
         documents=chunks,
@@ -94,7 +99,7 @@ def build_vectorstore(chunks):
         pre_delete_collection=True
     )
 
-    print(f"✅ Supabase Database successfully seeded with {len(chunks)} chunks!")
+    print(f"[SUCCESS] Supabase Database successfully seeded with {len(chunks)} chunks!")
     return vectorstore
 
 
