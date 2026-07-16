@@ -5,6 +5,7 @@ from .coaches import (
     get_coach_by_email,
     check_is_head_coach,
     add_coach_to_team,
+    get_team_coaches,
     is_valid_email,
     validate_password_strength
 )

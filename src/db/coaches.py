@@ -142,3 +142,22 @@ def add_coach_to_team(team_id: int, email: str, role: str) -> dict:
         cursor.close()
         conn.close()
 
+def get_team_coaches(team_id: int) -> list:
+    """Retrieves all coahces associatied with a team, including their name and role."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            SELECT c.coach_name, tc.role
+            FROM team_coaches tc
+            JOIN coaches c ON tc.coach_id = c.id
+            WHERE tc.team_id = %s
+            ORDER BY tc.role DESC, c.coach_name ASC;
+            """,
+            (team_id)
+        )
+        return [dict(row) for row in cursor.fetchall()]
+    finally:
+        cursor.close()
+        conn.close()
