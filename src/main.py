@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, EmailStr, field_validator
 from src.retriever import build_chain, build_agent_executor
-from src.database import get_coach_by_email, authenticate_coach, register_coach, create_team, get_coach_teams, set_active_team, update_team, add_player, get_team_players, update_player_stats, delete_player, bulk_update_player_stats, check_is_head_coach, add_coach_to_team, get_db_connection, update_player_eligibility, save_team_lineup, get_team_lineups, delete_team_lineup, add_returning_player, get_coach_players_directory
+from src.database import get_coach_by_email, authenticate_coach, register_coach, create_team, get_coach_teams, set_active_team, update_team, add_player, get_team_players, update_player_stats, delete_player, bulk_update_player_stats, check_is_head_coach, add_coach_to_team, get_db_connection, update_player_eligibility, save_team_lineup, get_team_lineups, delete_team_lineup, add_returning_player, get_coach_players_directory, get_team_coaches
 from src.auth import get_current_coach, verify_team_ownership
 from langchain_core.messages import HumanMessage, AIMessage
 import json
@@ -453,6 +453,21 @@ def api_invite_coach(team_id: int, data: InviteCoachRequest, current_coach: dict
     if not result["success"]:
         raise HTTPException(status_code=400, detail=result["error"])
     return result
+
+@app.get("/api/teams/{team_id}/coaches")
+def api_get_team_coaches(team_id: int, current_coach: dict = Depends(get_current_coach), role: str = Depends(verify_team_ownership)):
+    """Fetches and groups head and assistant coaches for a specific team."""
+    try:
+        coaches = get_team_coaches(team_id)
+        head_coaches = [c["coach_name"] for c in coaches if c["role"] == "Head Coach"]
+        assistant_coaches = [c["coach_name"] for c in coaches if c["role"] == "Assistant Coach"]
+
+        return {
+            "head_coaches": ", ".join(head_coaches) if head_coaches else "None",
+            "assistant_coaches": ", ".join(assistant_coaches) if assistant_coaches else ""
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # 5. Player Management API Routes
 @app.post("/api/players")
