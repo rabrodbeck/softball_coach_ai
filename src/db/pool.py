@@ -64,46 +64,71 @@ def get_db_connection():
     return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
 
 def init_db():
-    """Creates the coaches table automatically if it does not exist."""
+    """Initializes the database schema for multi-season career statistics."""
     conn = get_db_connection()
     cursor = conn.cursor()
+    
+    # 1. Create coaches table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS coaches (
-                   id SERIAL PRIMARY KEY,
-                   username TEXT UNIQUE NOT NULL,
-                   password_hash TEXT NOT NULL,
-                   coach_name TEXT NOT NULL,
-                   location TEXT NOT NULL,
-                   primary_age_group TEXT NOT NULL
-                   )
-                   ''')
-    """Alter players table to add eligible_positions and create lineups table if it does not exist."""
-    cursor.execute("""
-                   ALTER TABLE players 
-                   ADD COLUMN IF NOT EXISTS eligible_positions VARCHAR(255) DEFAULT 'P,C,1B,2B,SS,3B,LF,CF,RF';
-                   """)
-    cursor.execute("""
-                   ALTER TABLE offensive_stats 
-                   ADD COLUMN IF NOT EXISTS reached_on_error INTEGER DEFAULT 0;
-                   """)
+            id SERIAL PRIMARY KEY,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            coach_name TEXT NOT NULL,
+            location TEXT NOT NULL,
+            primary_age_group TEXT NOT NULL
+        );
+    ''')
     
-    cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS lineups (
-                   id serial primary key,
-                   team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
-                   game_date DATE NOT NULL,
-                   opponent VARCHAR(100) NOT NULL,
-                   innings_count INTEGER NOT NULL,
-                   lineup_data JSONB NOT NULL,
-                   created_by_coach_id INTEGER REFERENCES coaches(id) ON DELETE SET NULL,
-                   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                   )
-                   """)
+    # 2. Create players_teams join table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS players_teams (
+            player_id INTEGER REFERENCES players(id) ON DELETE CASCADE,
+            team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
+            player_number INTEGER,
+            games_played INTEGER DEFAULT 0,
+            PRIMARY KEY (player_id, team_id)
+        );
+    ''')
     
+    # 3. Alter players table to remove team specific keys and add eligibility
+    cursor.execute("ALTER TABLE players ADD COLUMN IF NOT EXISTS eligible_positions VARCHAR(255) DEFAULT 'P,C,1B,2B,SS,3B,LF,CF,RF';")
+    cursor.execute("ALTER TABLE players DROP COLUMN IF EXISTS team_id;")
+    cursor.execute("ALTER TABLE players DROP COLUMN IF EXISTS player_number;")
+    cursor.execute("ALTER TABLE players DROP COLUMN IF EXISTS games_played;")
+    
+    # 4. Alter stats tables
+    cursor.execute("ALTER TABLE offensive_stats ADD COLUMN IF NOT EXISTS reached_on_error INTEGER DEFAULT 0;")
+    
+    # 5. Recreate indexes for stats tables using composite key (player_id, team_id)
+    cursor.execute("DROP INDEX IF EXISTS idx_offensive_stats_player_id;")
+    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_offensive_stats_player_team ON offensive_stats (player_id, team_id);")
+    
+    cursor.execute("DROP INDEX IF EXISTS idx_pitching_stats_player_id;")
+    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_pitching_stats_player_team ON pitching_stats (player_id, team_id);")
+
+    cursor.execute("ALTER TABLE defensive_stats DROP CONSTRAINT IF EXISTS defensive_stats_player_id_key;")
+    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_defensive_stats_player_team ON defensive_stats (player_id, team_id);")
+
+    cursor.execute("ALTER TABLE catching_stats DROP CONSTRAINT IF EXISTS catching_stats_player_id_key;")
+    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_catching_stats_player_team ON catching_stats (player_id, team_id);")
+
+    # 6. Create lineups table
     cursor.execute("""
-                   ALTER TABLE lineups ENABLE ROW LEVEL SECURITY;
-                   """)
+        CREATE TABLE IF NOT EXISTS lineups (
+            id serial primary key,
+            team_id INTEGER REFERENCES teams(id) ON DELETE CASCADE,
+            game_date DATE NOT NULL,
+            opponent VARCHAR(100) NOT NULL,
+            innings_count INTEGER NOT NULL,
+            lineup_data JSONB NOT NULL,
+            created_by_coach_id INTEGER REFERENCES coaches(id) ON DELETE SET NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+    cursor.execute("ALTER TABLE lineups ENABLE ROW LEVEL SECURITY;")
 
     conn.commit()
+    cursor.close()
     conn.close()
 
