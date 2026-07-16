@@ -5,6 +5,7 @@ import { apiFetch } from '../utils/api';
 interface TeamState {
   teams: Team[];
   players: Player[];
+  playerDirectory: any[];
   selectedTeamId: number | null;
   userRole: 'Head Coach' | 'Assistant Coach' | null;
   isLoading: boolean;
@@ -13,6 +14,7 @@ interface TeamState {
   // Actions
   fetchTeams: (coachId: number, selectedTeamId: number | null, onSelectTeam: (team: Team) => void) => Promise<void>;
   fetchPlayers: (teamId: number) => Promise<void>;
+  fetchPlayerDirectory: () => Promise<void>;
   createTeam: (
     coachId: number,
     teamName: string,
@@ -41,6 +43,12 @@ interface TeamState {
     battingHand: string,
     throwingHand: string
   ) => Promise<void>;
+  addReturningPlayer: (
+    coachId: number,
+    teamId: number,
+    playerId: number,
+    playerNumber: number
+  ) => Promise<void>;
   updatePlayer: (
     coachId: number,
     playerId: number,
@@ -54,6 +62,7 @@ interface TeamState {
 export const useTeamStore = create<TeamState>((set, get) => ({
   teams: [],
   players: [],
+  playerDirectory: [],
   selectedTeamId: null,
   userRole: null,
   isLoading: false,
@@ -104,6 +113,18 @@ export const useTeamStore = create<TeamState>((set, get) => ({
       set({ error: err instanceof Error ? err.message : 'Error fetching players' });
     } finally {
       set({ isLoading: false });
+    }
+  },
+
+  fetchPlayerDirectory: async () => {
+    try {
+      const response = await apiFetch(`/api/players/directory`);
+      if (response.ok) {
+        const data = await response.json();
+        set({ playerDirectory: data });
+      }
+    } catch (err) {
+      console.error("Error fetching player directory:", err);
     }
   },
 
@@ -195,18 +216,43 @@ export const useTeamStore = create<TeamState>((set, get) => ({
     }
   },
 
+  addReturningPlayer: async (coachId, teamId, playerId, playerNumber) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await apiFetch(`/api/players/returning`, {
+        method: "POST",
+        body: JSON.stringify({
+          coach_id: coachId,
+          team_id: teamId,
+          player_id: playerId,
+          player_number: playerNumber
+        })
+      });
+      if (response.ok) {
+        await get().fetchPlayers(teamId);
+      } else {
+        set({ error: 'Failed to add returning player' });
+      }
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : 'Error adding returning player' });
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
   updatePlayer: async (coachId, playerId, playerData) => {
     set({ isLoading: true, error: null });
     try {
+      const teamId = get().selectedTeamId;
       const response = await apiFetch(`/api/players/${playerId}`, {
         method: "PUT",
         body: JSON.stringify({
           coach_id: coachId,
+          team_id: teamId,
           ...playerData
         })
       });
       if (response.ok) {
-        const teamId = get().selectedTeamId;
         if (teamId) {
           await get().fetchPlayers(teamId);
         }
@@ -223,11 +269,11 @@ export const useTeamStore = create<TeamState>((set, get) => ({
   deletePlayer: async (coachId, playerId) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await apiFetch(`/api/players/${playerId}?coach_id=${coachId}`, {
+      const teamId = get().selectedTeamId;
+      const response = await apiFetch(`/api/players/${playerId}?coach_id=${coachId}&team_id=${teamId}`, {
         method: "DELETE"
       });
       if (response.ok) {
-        const teamId = get().selectedTeamId;
         if (teamId) {
           await get().fetchPlayers(teamId);
         }
