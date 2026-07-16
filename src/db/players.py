@@ -4,7 +4,7 @@ from src.db.metrics import calculate_derived_stats, add_fractional_innings
 from src.db.coaches import check_is_head_coach
 
 def add_player(coach_id: int, team_id: int, name: str, number: int, batting_hand: str, throwing_hand: str, parent_player_id: int = None):
-    """Creates a new player on a team with corresponding empty stats rows."""
+    """Creates a brand new player and registers them on a team with corresponding empty stats rows."""
     if not check_is_head_coach(coach_id, team_id):
         raise PermissionError("Only a Head Coach can add players.")
     
@@ -14,11 +14,11 @@ def add_player(coach_id: int, team_id: int, name: str, number: int, batting_hand
         # 1. Insert core player info
         cursor.execute(
             """
-            INSERT INTO players (team_id, player_name, player_number, batting_hand, throwing_hand, parent_player_id)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO players (player_name, batting_hand, throwing_hand, parent_player_id)
+            VALUES (%s, %s, %s, %s)
             RETURNING *;
             """,
-            (team_id, name.strip(), number, batting_hand, throwing_hand, parent_player_id)
+            (name.strip(), batting_hand, throwing_hand, parent_player_id)
         )
         player_row = cursor.fetchone()
         if not player_row:
@@ -26,18 +26,20 @@ def add_player(coach_id: int, team_id: int, name: str, number: int, batting_hand
             
         player_id = player_row["id"]
         
-        # 2. Insert stats rows for all categories
-        cursor.execute("INSERT INTO offensive_stats (player_id, team_id) VALUES (%s, %s) RETURNING *;", (player_id, team_id))
-        off_row = cursor.fetchone()
+        # 2. Insert seasonal roster association
+        cursor.execute(
+            """
+            INSERT INTO players_teams (player_id, team_id, player_number, games_played)
+            VALUES (%s, %s, %s, 0);
+            """,
+            (player_id, team_id, number)
+        )
         
-        cursor.execute("INSERT INTO pitching_stats (player_id, team_id) VALUES (%s, %s) RETURNING *;", (player_id, team_id))
-        pit_row = cursor.fetchone()
-
-        cursor.execute("INSERT INTO defensive_stats (player_id, team_id) VALUES (%s, %s) RETURNING *;", (player_id, team_id))
-        def_row = cursor.fetchone()
-
-        cursor.execute("INSERT INTO catching_stats (player_id, team_id) VALUES (%s, %s) RETURNING *;", (player_id, team_id))
-        cat_row = cursor.fetchone()
+        # 3. Insert stats rows for all categories
+        cursor.execute("INSERT INTO offensive_stats (player_id, team_id) VALUES (%s, %s);", (player_id, team_id))
+        cursor.execute("INSERT INTO pitching_stats (player_id, team_id) VALUES (%s, %s);", (player_id, team_id))
+        cursor.execute("INSERT INTO defensive_stats (player_id, team_id) VALUES (%s, %s);", (player_id, team_id))
+        cursor.execute("INSERT INTO catching_stats (player_id, team_id) VALUES (%s, %s);", (player_id, team_id))
         
         conn.commit()
 
@@ -47,12 +49,26 @@ def add_player(coach_id: int, team_id: int, name: str, number: int, batting_hand
         innings_per_game = team_row["innings_per_game"] if team_row else 7
         
         full_player = {
-            **dict(off_row),
-            **dict(pit_row),
-            **dict(def_row),
-            **dict(cat_row),
-            **dict(player_row),
-            "innings_per_game": innings_per_game
+            "id": player_id,
+            "team_id": team_id,
+            "player_name": player_row["player_name"],
+            "player_number": number,
+            "batting_hand": player_row["batting_hand"],
+            "throwing_hand": player_row["throwing_hand"],
+            "parent_player_id": player_row["parent_player_id"],
+            "eligible_positions": player_row.get("eligible_positions") or "P,C,1B,2B,3B,SS,LF,CF,RF",
+            "games_played": 0,
+            "innings_per_game": innings_per_game,
+            "plate_appearances": 0, "at_bats": 0, "singles": 0, "doubles": 0, "triples": 0, "home_runs": 0,
+            "walks": 0, "strikeouts": 0, "hit_by_pitches": 0, "stolen_bases": 0, "caught_stealing": 0,
+            "runs_scored": 0, "runs_batted_in": 0, "reached_on_error": 0,
+            "games_pitched": 0, "games_started": 0, "innings_pitched": 0.0, "batters_faced": 0, "number_of_pitches": 0,
+            "hits_allowed": 0, "runs_allowed": 0, "earned_runs": 0, "walks_allowed": 0, "strikeouts_thrown": 0,
+            "hit_by_pitches_allowed": 0, "left_on_base": 0,
+            "total_chances": 0, "assists": 0, "putouts": 0, "errors": 0,
+            "innings_p": 0.0, "innings_c": 0.0, "innings_1b": 0.0, "innings_2b": 0.0, "innings_3b": 0.0,
+            "innings_ss": 0.0, "innings_lf": 0.0, "innings_cf": 0.0, "innings_rf": 0.0,
+            "innings_caught": 0.0, "passed_balls_allowed": 0, "runners_stolen_bases": 0, "runners_caught_stealing": 0
         }
         return calculate_derived_stats(full_player)
     finally:
@@ -60,15 +76,49 @@ def add_player(coach_id: int, team_id: int, name: str, number: int, batting_hand
         conn.close()
 
 
+def add_returning_player(coach_id: int, team_id: int, player_id: int, number: int):
+    """Links an existing player in the database to a new team roster."""
+    if not check_is_head_coach(coach_id, team_id):
+        raise PermissionError("Only a Head Coach can add players.")
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        # Create seasonal association
+        cursor.execute(
+            """
+            INSERT INTO players_teams (player_id, team_id, player_number, games_played)
+            VALUES (%s, %s, %s, 0)
+            ON CONFLICT (player_id, team_id) DO UPDATE SET player_number = EXCLUDED.player_number;
+            """,
+            (player_id, team_id, number)
+        )
+        
+        # Create seasonal stats rows
+        cursor.execute("INSERT INTO offensive_stats (player_id, team_id) VALUES (%s, %s) ON CONFLICT (player_id, team_id) DO NOTHING;", (player_id, team_id))
+        cursor.execute("INSERT INTO pitching_stats (player_id, team_id) VALUES (%s, %s) ON CONFLICT (player_id, team_id) DO NOTHING;", (player_id, team_id))
+        cursor.execute("INSERT INTO defensive_stats (player_id, team_id) VALUES (%s, %s) ON CONFLICT (player_id, team_id) DO NOTHING;", (player_id, team_id))
+        cursor.execute("INSERT INTO catching_stats (player_id, team_id) VALUES (%s, %s) ON CONFLICT (player_id, team_id) DO NOTHING;", (player_id, team_id))
+        
+        conn.commit()
+        
+        # Fetch full stats
+        roster = get_team_players(team_id)
+        return next((p for p in roster if p["id"] == player_id), None)
+    finally:
+        cursor.close()
+        conn.close()
+
+
 def get_team_players(team_id: int):
-    """Retrieves all players on a team by left-joining players and stats."""
+    """Retrieves all players on a team by joining players, players_teams, and team-specific stats."""
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
         cursor.execute(
             """
             SELECT 
-                p.id, p.team_id, p.player_name, p.player_number, p.batting_hand, p.throwing_hand, p.games_played, p.parent_player_id, p.created_at, p.updated_at, p.eligible_positions,
+                p.id, pt.team_id, p.player_name, pt.player_number, p.batting_hand, p.throwing_hand, pt.games_played, p.parent_player_id, p.created_at, p.updated_at, p.eligible_positions,
                 COALESCE(t.innings_per_game, 7) as innings_per_game,
                 COALESCE(o.plate_appearances, 0) as plate_appearances,
                 COALESCE(o.at_bats, 0) as at_bats,
@@ -114,12 +164,13 @@ def get_team_players(team_id: int):
                 COALESCE(d.innings_cf, 0.0) as innings_cf,
                 COALESCE(d.innings_rf, 0.0) as innings_rf
             FROM players p
-            LEFT JOIN teams t ON p.team_id = t.id
-            LEFT JOIN offensive_stats o ON p.id = o.player_id
-            LEFT JOIN pitching_stats p_stats ON p.id = p_stats.player_id
-            LEFT JOIN defensive_stats d ON p.id = d.player_id
-            LEFT JOIN catching_stats c ON p.id = c.player_id
-            WHERE p.team_id = %s
+            JOIN players_teams pt ON p.id = pt.player_id
+            LEFT JOIN teams t ON pt.team_id = t.id
+            LEFT JOIN offensive_stats o ON p.id = o.player_id AND pt.team_id = o.team_id
+            LEFT JOIN pitching_stats p_stats ON p.id = p_stats.player_id AND pt.team_id = p_stats.team_id
+            LEFT JOIN defensive_stats d ON p.id = d.player_id AND pt.team_id = d.team_id
+            LEFT JOIN catching_stats c ON p.id = c.player_id AND pt.team_id = c.team_id
+            WHERE pt.team_id = %s
             ORDER BY p.player_name ASC;
             """,
             (team_id,)
@@ -131,54 +182,84 @@ def get_team_players(team_id: int):
         conn.close()
 
 
-def update_player_stats(coach_id: int, player_id: int, stats: dict):
-    """Updates core details in players and stats inside transaction."""
+def get_coach_players_directory(coach_id: int):
+    """Retrieves all distinct players created by a coach across all their teams."""
     conn = get_db_connection()
-    cursor = conn.conn.cursor() if hasattr(conn, 'conn') else conn.cursor()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """
+            SELECT DISTINCT p.id, p.player_name, p.batting_hand, p.throwing_hand, p.eligible_positions
+            FROM players p
+            JOIN players_teams pt ON p.id = pt.player_id
+            JOIN team_coaches tc ON pt.team_id = tc.team_id
+            WHERE tc.coach_id = %s AND tc.is_active = true
+            ORDER BY p.player_name ASC;
+            """,
+            (coach_id,)
+        )
+        return [dict(row) for row in cursor.fetchall()]
+    finally:
+        cursor.close()
+        conn.close()
 
-    cursor.execute("SELECT team_id FROM players WHERE id = %s LIMIT 1;", (player_id,))
-    row = cursor.fetchone()
-    if not row:
-        return None
-    team_id = row["team_id"]
+
+def update_player_stats(coach_id: int, player_id: int, stats: dict):
+    """Updates core player details, seasonal jersey number/games, and stats inside a transaction."""
+    team_id = stats.get("team_id")
+    if not team_id:
+        raise ValueError("team_id is required to update statistics.")
 
     if not check_is_head_coach(coach_id, team_id):
         raise PermissionError("Only a Head Coach can edit player stats.")
     
+    conn = get_db_connection()
+    cursor = conn.conn.cursor() if hasattr(conn, 'conn') else conn.cursor()
+    
     try:
         parent_id = stats.get("parent_player_id")
 
-        # Update players table
+        # 1. Update core details in players
         cursor.execute(
             """
             UPDATE players
-            SET player_name = %s, player_number = %s, batting_hand = %s, throwing_hand = %s, games_played = %s, parent_player_id = %s,
-                eligible_positions = %s,
-                updated_at = CURRENT_TIMESTAMP
+            SET player_name = %s, batting_hand = %s, throwing_hand = %s, parent_player_id = %s,
+                eligible_positions = %s, updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
             RETURNING *;
             """,
             (
-                stats["player_name"].strip(), stats["player_number"], stats["batting_hand"], stats["throwing_hand"],
-                stats["games_played"], parent_id, stats.get("eligible_positions") or "P,C,1B,2B,3B,SS,LF,CF,RF", player_id
+                stats["player_name"].strip(), stats["batting_hand"], stats["throwing_hand"],
+                parent_id, stats.get("eligible_positions") or "P,C,1B,2B,3B,SS,LF,CF,RF", player_id
             )
         )
         player_row = cursor.fetchone()
         if not player_row:
             return None
 
-        # Update offensive_stats (INSERT OR UPDATE)
+        # 2. Update seasonal details in players_teams
+        cursor.execute(
+            """
+            UPDATE players_teams
+            SET player_number = %s, games_played = %s
+            WHERE player_id = %s AND team_id = %s
+            RETURNING *;
+            """,
+            (stats["player_number"], stats["games_played"], player_id, team_id)
+        )
+        pt_row = cursor.fetchone()
+
+        # 3. Update offensive stats
         cursor.execute(
             """
             INSERT INTO offensive_stats (
                 player_id, team_id, plate_appearances, at_bats,
                 singles, doubles, triples, home_runs,
-                walks, strikeouts, hit_by_pitches,
-                stolen_bases, caught_stealing,
+                walks, strikeouts, hit_by_pitches, stolen_bases, caught_stealing,
                 runs_scored, runs_batted_in, reached_on_error, updated_at
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-            ON CONFLICT (player_id) DO UPDATE
+            ON CONFLICT (player_id, team_id) DO UPDATE
             SET plate_appearances = EXCLUDED.plate_appearances, at_bats = EXCLUDED.at_bats,
                 singles = EXCLUDED.singles, doubles = EXCLUDED.doubles, triples = EXCLUDED.triples, home_runs = EXCLUDED.home_runs,
                 walks = EXCLUDED.walks, strikeouts = EXCLUDED.strikeouts, hit_by_pitches = EXCLUDED.hit_by_pitches,
@@ -188,7 +269,7 @@ def update_player_stats(coach_id: int, player_id: int, stats: dict):
             RETURNING *;
             """,
             (
-                player_id, player_row["team_id"], stats["plate_appearances"], stats["at_bats"],
+                player_id, team_id, stats["plate_appearances"], stats["at_bats"],
                 stats["singles"], stats["doubles"], stats["triples"], stats["home_runs"],
                 stats["walks"], stats["strikeouts"], stats["hit_by_pitches"],
                 stats["stolen_bases"], stats["caught_stealing"],
@@ -197,7 +278,7 @@ def update_player_stats(coach_id: int, player_id: int, stats: dict):
         )
         stats_row = cursor.fetchone()
 
-        # Update pitching_stats
+        # 4. Update pitching stats
         cursor.execute(
             """
             INSERT INTO pitching_stats (
@@ -207,7 +288,7 @@ def update_player_stats(coach_id: int, player_id: int, stats: dict):
                 hit_by_pitches, left_on_base, updated_at
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-            ON CONFLICT (player_id) DO UPDATE
+            ON CONFLICT (player_id, team_id) DO UPDATE
             SET games_pitched = EXCLUDED.games_pitched, games_started = EXCLUDED.games_started,
                 innings_pitched = EXCLUDED.innings_pitched, batters_faced = EXCLUDED.batters_faced,
                 number_of_pitches = EXCLUDED.number_of_pitches, hits = EXCLUDED.hits, runs = EXCLUDED.runs,
@@ -216,7 +297,7 @@ def update_player_stats(coach_id: int, player_id: int, stats: dict):
             RETURNING *;
             """,
             (
-                player_id, player_row["team_id"], stats.get("games_pitched", 0), stats.get("games_started", 0),
+                player_id, team_id, stats.get("games_pitched", 0), stats.get("games_started", 0),
                 stats.get("innings_pitched", 0.0), stats.get("batters_faced", 0), stats.get("number_of_pitches", 0),
                 stats.get("hits_allowed", 0), stats.get("runs_allowed", 0), stats.get("earned_runs", 0),
                 stats.get("walks_allowed", 0), stats.get("strikeouts_thrown", 0), stats.get("hit_by_pitches_allowed", 0),
@@ -225,7 +306,7 @@ def update_player_stats(coach_id: int, player_id: int, stats: dict):
         )
         pit_row = cursor.fetchone()
 
-        # Update defensive_stats
+        # 5. Update defensive stats
         cursor.execute(
             """
             INSERT INTO defensive_stats (
@@ -233,7 +314,7 @@ def update_player_stats(coach_id: int, player_id: int, stats: dict):
                 innings_p, innings_c, innings_1b, innings_2b, innings_3b, innings_ss, innings_lf, innings_cf, innings_rf, updated_at
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-            ON CONFLICT (player_id) DO UPDATE
+            ON CONFLICT (player_id, team_id) DO UPDATE
             SET total_chances = EXCLUDED.total_chances, assists = EXCLUDED.assists,
                 putouts = EXCLUDED.putouts, errors = EXCLUDED.errors,
                 innings_p = EXCLUDED.innings_p, innings_c = EXCLUDED.innings_c,
@@ -244,7 +325,7 @@ def update_player_stats(coach_id: int, player_id: int, stats: dict):
             RETURNING *;
             """,
             (
-                player_id, player_row["team_id"], stats.get("total_chances", 0), stats.get("assists", 0),
+                player_id, team_id, stats.get("total_chances", 0), stats.get("assists", 0),
                 stats.get("putouts", 0), stats.get("errors", 0),
                 stats.get("innings_p", 0.0), stats.get("innings_c", 0.0), stats.get("innings_1b", 0.0),
                 stats.get("innings_2b", 0.0), stats.get("innings_3b", 0.0), stats.get("innings_ss", 0.0),
@@ -253,21 +334,21 @@ def update_player_stats(coach_id: int, player_id: int, stats: dict):
         )
         def_row = cursor.fetchone()
 
-        # Update catching_stats
+        # 6. Update catching stats
         cursor.execute(
             """
             INSERT INTO catching_stats (
                 player_id, team_id, innings_caught, passed_balls_allowed, runners_stolen_bases, runners_caught_stealing, updated_at
             )
             VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-            ON CONFLICT (player_id) DO UPDATE
+            ON CONFLICT (player_id, team_id) DO UPDATE
             SET innings_caught = EXCLUDED.innings_caught, passed_balls_allowed = EXCLUDED.passed_balls_allowed,
                 runners_stolen_bases = EXCLUDED.runners_stolen_bases, runners_caught_stealing = EXCLUDED.runners_caught_stealing,
                 updated_at = CURRENT_TIMESTAMP
             RETURNING *;
             """,
             (
-                player_id, player_row["team_id"], stats.get("innings_caught", 0.0), stats.get("passed_balls_allowed", 0),
+                player_id, team_id, stats.get("innings_caught", 0.0), stats.get("passed_balls_allowed", 0),
                 stats.get("runners_stolen_bases", 0), stats.get("runners_caught_stealing", 0)
             )
         )
@@ -276,13 +357,15 @@ def update_player_stats(coach_id: int, player_id: int, stats: dict):
         conn.commit()
 
         # Fetch team innings_per_game
-        cursor.execute("SELECT innings_per_game FROM teams WHERE id = %s;", (player_row["team_id"],))
+        cursor.execute("SELECT innings_per_game FROM teams WHERE id = %s;", (team_id,))
         team_row = cursor.fetchone()
         innings_per_game = team_row["innings_per_game"] if team_row else 7
 
         full_player = {
             **dict(stats_row),
             **dict(player_row),
+            "player_number": pt_row["player_number"],
+            "games_played": pt_row["games_played"],
             "games_pitched": pit_row["games_pitched"],
             "games_started": pit_row["games_started"],
             "innings_pitched": float(pit_row["innings_pitched"]),
@@ -323,22 +406,24 @@ def update_player_stats(coach_id: int, player_id: int, stats: dict):
         conn.close()
 
 
-def delete_player(coach_id: int, player_id: int):
-    # Fetch team_id for this player
+def delete_player(coach_id: int, player_id: int, team_id: int):
+    """Removes a player from a specific team (deletes association and team stats)."""
+    if not check_is_head_coach(coach_id, team_id):
+        raise PermissionError("Only a Head Coach can remove players.")
+        
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT team_id FROM players WHERE id = %s LIMIT 1;", (player_id,))
-    row = cursor.fetchone()
-    if not row:
-        return False
-    team_id = row["team_id"]
-    
-    if not check_is_head_coach(coach_id, team_id):
-        raise PermissionError("Only a Head Coach can delete players.")
-        
     try:
-        cursor.execute("DELETE FROM players WHERE id = %s RETURNING id;", (player_id,))
+        # Delete team-specific stats
+        cursor.execute("DELETE FROM offensive_stats WHERE player_id = %s AND team_id = %s;", (player_id, team_id))
+        cursor.execute("DELETE FROM pitching_stats WHERE player_id = %s AND team_id = %s;", (player_id, team_id))
+        cursor.execute("DELETE FROM defensive_stats WHERE player_id = %s AND team_id = %s;", (player_id, team_id))
+        cursor.execute("DELETE FROM catching_stats WHERE player_id = %s AND team_id = %s;", (player_id, team_id))
+        
+        # Delete seasonal roster association
+        cursor.execute("DELETE FROM players_teams WHERE player_id = %s AND team_id = %s RETURNING player_id;", (player_id, team_id))
         ret_row = cursor.fetchone()
+        
         conn.commit()
         return ret_row is not None
     finally:
@@ -347,14 +432,13 @@ def delete_player(coach_id: int, player_id: int):
 
 
 def bulk_update_player_stats(coach_id: int, team_id: int, updates: list):
-    """Updates multiple players stats inside a split-table players structure."""
+    """Updates multiple players stats inside the team-split players structure."""
     if not check_is_head_coach(coach_id, team_id):
         raise PermissionError("Only a Head Coach can import bulk stats.")
     
     conn = get_db_connection()
     cursor = conn.conn.cursor() if hasattr(conn, 'conn') else conn.cursor()
     try:
-        # Fetch the team's innings_per_game to pass to the derived stats
         cursor.execute("SELECT innings_per_game FROM teams WHERE id = %s;", (team_id,))
         team_row = cursor.fetchone()
         innings_per_game = team_row["innings_per_game"] if team_row else 7
@@ -364,15 +448,25 @@ def bulk_update_player_stats(coach_id: int, team_id: int, updates: list):
             number = p.get("player_number")
             name = p.get("player_name", "").strip()
             
-            # Find player row by jersey number (if specified) or name
+            # Find player ID using join table
             if number >= 0:
                 cursor.execute(
-                    "SELECT id, games_played FROM players WHERE team_id = %s AND player_number = %s LIMIT 1;",
+                    """
+                    SELECT p.id, pt.games_played 
+                    FROM players p 
+                    JOIN players_teams pt ON p.id = pt.player_id 
+                    WHERE pt.team_id = %s AND pt.player_number = %s LIMIT 1;
+                    """,
                     (team_id, number)
                 )
             else:
                 cursor.execute(
-                    "SELECT id, games_played FROM players WHERE team_id = %s AND LOWER(player_name) = LOWER(%s) LIMIT 1;",
+                    """
+                    SELECT p.id, pt.games_played 
+                    FROM players p 
+                    JOIN players_teams pt ON p.id = pt.player_id 
+                    WHERE pt.team_id = %s AND LOWER(p.player_name) = LOWER(%s) LIMIT 1;
+                    """,
                     (team_id, name)
                 )
             row = cursor.fetchone()
@@ -382,11 +476,15 @@ def bulk_update_player_stats(coach_id: int, team_id: int, updates: list):
             player_id = row["id"]
             games_played = p.get("games_played", row["games_played"])
 
-            # Update players table
+            # Update seasonal games played
             cursor.execute(
-                "UPDATE players SET games_played = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s RETURNING *;",
-                (games_played, player_id)
+                "UPDATE players_teams SET games_played = %s WHERE player_id = %s AND team_id = %s RETURNING *;",
+                (games_played, player_id, team_id)
             )
+            pt_row = cursor.fetchone()
+            
+            # Fetch core player row
+            cursor.execute("SELECT * FROM players WHERE id = %s;", (player_id,))
             player_row = cursor.fetchone()
 
             # Update offensive stats
@@ -395,27 +493,17 @@ def bulk_update_player_stats(coach_id: int, team_id: int, updates: list):
                 INSERT INTO offensive_stats (
                     player_id, team_id, plate_appearances, at_bats,
                     singles, doubles, triples, home_runs,
-                    walks, strikeouts, hit_by_pitches,
-                    stolen_bases, caught_stealing,
+                    walks, strikeouts, hit_by_pitches, stolen_bases, caught_stealing,
                     runs_scored, runs_batted_in, reached_on_error, updated_at
                 )
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-                ON CONFLICT (player_id) DO UPDATE
-                SET plate_appearances = EXCLUDED.plate_appearances,
-                    at_bats = EXCLUDED.at_bats,
-                    singles = EXCLUDED.singles,
-                    doubles = EXCLUDED.doubles,
-                    triples = EXCLUDED.triples,
-                    home_runs = EXCLUDED.home_runs,
-                    walks = EXCLUDED.walks,
-                    strikeouts = EXCLUDED.strikeouts,
-                    hit_by_pitches = EXCLUDED.hit_by_pitches,
-                    stolen_bases = EXCLUDED.stolen_bases,
-                    caught_stealing = EXCLUDED.caught_stealing,
-                    runs_scored = EXCLUDED.runs_scored,
-                    runs_batted_in = EXCLUDED.runs_batted_in,
-                    reached_on_error = EXCLUDED.reached_on_error,
-                    updated_at = CURRENT_TIMESTAMP
+                ON CONFLICT (player_id, team_id) DO UPDATE
+                SET plate_appearances = EXCLUDED.plate_appearances, at_bats = EXCLUDED.at_bats,
+                    singles = EXCLUDED.singles, doubles = EXCLUDED.doubles, triples = EXCLUDED.triples, home_runs = EXCLUDED.home_runs,
+                    walks = EXCLUDED.walks, strikeouts = EXCLUDED.strikeouts, hit_by_pitches = EXCLUDED.hit_by_pitches,
+                    stolen_bases = EXCLUDED.stolen_bases, caught_stealing = EXCLUDED.caught_stealing,
+                    runs_scored = EXCLUDED.runs_scored, runs_batted_in = EXCLUDED.runs_batted_in,
+                    reached_on_error = EXCLUDED.reached_on_error, updated_at = CURRENT_TIMESTAMP
                 RETURNING *;
                 """,
                 (
@@ -428,7 +516,7 @@ def bulk_update_player_stats(coach_id: int, team_id: int, updates: list):
             )
             stats_row = cursor.fetchone()
 
-            # Update pitching stats table (only if games_pitched > 0)
+            # Update pitching stats table
             if p.get("games_pitched", 0) > 0:
                 cursor.execute(
                     """
@@ -439,20 +527,12 @@ def bulk_update_player_stats(coach_id: int, team_id: int, updates: list):
                         hit_by_pitches, left_on_base, updated_at
                     )
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-                    ON CONFLICT (player_id) DO UPDATE
-                    SET games_pitched = EXCLUDED.games_pitched,
-                        games_started = EXCLUDED.games_started,
-                        innings_pitched = EXCLUDED.innings_pitched,
-                        batters_faced = EXCLUDED.batters_faced,
-                        number_of_pitches = EXCLUDED.number_of_pitches,
-                        hits = EXCLUDED.hits,
-                        runs = EXCLUDED.runs,
-                        earned_runs = EXCLUDED.earned_runs,
-                        walks = EXCLUDED.walks,
-                        strikeouts = EXCLUDED.strikeouts,
-                        hit_by_pitches = EXCLUDED.hit_by_pitches,
-                        left_on_base = EXCLUDED.left_on_base,
-                        updated_at = CURRENT_TIMESTAMP
+                    ON CONFLICT (player_id, team_id) DO UPDATE
+                    SET games_pitched = EXCLUDED.games_pitched, games_started = EXCLUDED.games_started,
+                        innings_pitched = EXCLUDED.innings_pitched, batters_faced = EXCLUDED.batters_faced,
+                        number_of_pitches = EXCLUDED.number_of_pitches, hits = EXCLUDED.hits, runs = EXCLUDED.runs,
+                        earned_runs = EXCLUDED.earned_runs, walks = EXCLUDED.walks, strikeouts = EXCLUDED.strikeouts,
+                        hit_by_pitches = EXCLUDED.hit_by_pitches, left_on_base = EXCLUDED.left_on_base, updated_at = CURRENT_TIMESTAMP
                     RETURNING *;
                     """,
                     (
@@ -464,8 +544,7 @@ def bulk_update_player_stats(coach_id: int, team_id: int, updates: list):
                 )
                 pit_row = cursor.fetchone()
             else:
-                # Retrieve existing pitching stats if they exist
-                cursor.execute("SELECT * FROM pitching_stats WHERE player_id = %s LIMIT 1;", (player_id,))
+                cursor.execute("SELECT * FROM pitching_stats WHERE player_id = %s AND team_id = %s LIMIT 1;", (player_id, team_id))
                 pit_row = cursor.fetchone()
                 if not pit_row:
                     pit_row = {
@@ -474,6 +553,7 @@ def bulk_update_player_stats(coach_id: int, team_id: int, updates: list):
                         "strikeouts": 0, "hit_by_pitches": 0, "left_on_base": 0
                     }
 
+            # Update defensive stats
             new_inn_p = float(p.get("innings_p") or 0.0)
             new_inn_c = float(p.get("innings_c") or 0.0)
             new_inn_1b = float(p.get("innings_1b") or 0.0)
@@ -484,7 +564,6 @@ def bulk_update_player_stats(coach_id: int, team_id: int, updates: list):
             new_inn_cf = float(p.get("innings_cf") or 0.0)
             new_inn_rf = float(p.get("innings_rf") or 0.0)
 
-            # Update defensive_stats
             cursor.execute(
                 """
                 INSERT INTO defensive_stats (
@@ -492,7 +571,7 @@ def bulk_update_player_stats(coach_id: int, team_id: int, updates: list):
                     innings_p, innings_c, innings_1b, innings_2b, innings_3b, innings_ss, innings_lf, innings_cf, innings_rf, updated_at
                 )
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-                ON CONFLICT (player_id) DO UPDATE
+                ON CONFLICT (player_id, team_id) DO UPDATE
                 SET total_chances = EXCLUDED.total_chances, assists = EXCLUDED.assists,
                     putouts = EXCLUDED.putouts, errors = EXCLUDED.errors,
                     innings_p = EXCLUDED.innings_p, innings_c = EXCLUDED.innings_c,
@@ -509,14 +588,14 @@ def bulk_update_player_stats(coach_id: int, team_id: int, updates: list):
             )
             def_row = cursor.fetchone()
 
-            # Update catching_stats
+            # Update catching stats
             cursor.execute(
                 """
                 INSERT INTO catching_stats (
                     player_id, team_id, innings_caught, passed_balls_allowed, runners_stolen_bases, runners_caught_stealing, updated_at
                 )
                 VALUES (%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-                ON CONFLICT (player_id) DO UPDATE
+                ON CONFLICT (player_id, team_id) DO UPDATE
                 SET innings_caught = EXCLUDED.innings_caught, passed_balls_allowed = EXCLUDED.passed_balls_allowed,
                     runners_stolen_bases = EXCLUDED.runners_stolen_bases, runners_caught_stealing = EXCLUDED.runners_caught_stealing,
                     updated_at = CURRENT_TIMESTAMP
@@ -562,7 +641,8 @@ def bulk_update_player_stats(coach_id: int, team_id: int, updates: list):
                     "runners_stolen_bases": cat_row["runners_stolen_bases"],
                     "runners_caught_stealing": cat_row["runners_caught_stealing"],
                     "innings_per_game": innings_per_game,
-                    **dict(player_row)
+                    **dict(player_row),
+                    "player_number": pt_row["player_number"]
                 }
                 updated_players.append(calculate_derived_stats(full_player))
                 
@@ -590,4 +670,3 @@ def update_player_eligibility(player_id: int, eligible_positions: str):
     finally:
         cursor.close()
         conn.close()
-
