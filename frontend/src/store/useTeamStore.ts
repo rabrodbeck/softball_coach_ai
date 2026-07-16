@@ -10,11 +10,13 @@ interface TeamState {
   userRole: 'Head Coach' | 'Assistant Coach' | null;
   isLoading: boolean;
   error: string | null;
+  activeTeamCoaches: { head_coaches: string; asistant_coaches: string } | null;
 
   // Actions
   fetchTeams: (coachId: number, selectedTeamId: number | null, onSelectTeam: (team: Team) => void) => Promise<void>;
   fetchPlayers: (teamId: number) => Promise<void>;
   fetchPlayerDirectory: () => Promise<void>;
+  fetchTeamCoaches: (teamId: number) => Promise<void>;
   createTeam: (
     coachId: number,
     teamName: string,
@@ -67,6 +69,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
   userRole: null,
   isLoading: false,
   error: null,
+  activeTeamCoaches: null,
 
   fetchTeams: async (coachId, selectedTeamId, onSelectTeam) => {
     set({ isLoading: true, error: null });
@@ -113,6 +116,21 @@ export const useTeamStore = create<TeamState>((set, get) => ({
       set({ error: err instanceof Error ? err.message : 'Error fetching players' });
     } finally {
       set({ isLoading: false });
+    }
+  },
+
+  fetchTeamCoaches: async (teamId) => {
+    try {
+      const response = await apiFetch(`/api/teams/${teamId}/coaches`);
+      if (response.ok) {
+        const data = await response.json();
+        set({ activeTeamCoaches: data });
+      } else {
+        set ({ activeTeamCoaches: null});
+      }
+    } catch (err) {
+      console.error("Failed to fetch team coaches:", err);
+      set({ activeTeamCoaches: null });
     }
   },
 
