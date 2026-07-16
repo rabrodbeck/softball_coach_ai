@@ -670,31 +670,31 @@ def update_player_eligibility(player_id: int, eligible_positions: str):
         cursor.close()
         conn.close()
 
-    def search_players_global(query_str: str) -> list:
-        """Searches all players in the database matching a name, returning them with their latest team context."""
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        try:
-            search_pattern = f"%{query_str.strip()}%"
-            cursor.execute(
-                """
-                SELECT p.id, p.player_name, p.batting_hand, p.throwing_hand, p.eligible_postitions, t.team_name, t.season
-                FROM players p
-                LEFT JOIN LATERAL (
-                    SELECT pt.team_id
-                    FROM players_teams pt
-                    WHERE pt.player_id = p.id
-                    ORDER BY pt.team_id DESC
-                    LIMIT 1
-                ) latest ON TRUE
-                LEFT JOIN teams t ON latest.team_id = t.id
-                WHERE p.player_name ILIKE %s
-                ORDER BY p.player_name ASC
-                LIMIT 20;
-                """,
-                (search_pattern,)
-            )
-            return [dict(row) for row in cursor.fetchall()]
-        finally:
-            cursor.close()
-            conn.close()
+def search_players_global(query_str: str) -> list:
+    """Searches all players in the database matching a name, returning them with their latest team context."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        search_pattern = f"%{query_str.strip()}%"
+        cursor.execute(
+            """
+            SELECT p.id, p.player_name, p.batting_hand, p.throwing_hand, p.eligible_postitions, t.team_name, t.season
+            FROM players p
+            LEFT JOIN LATERAL (
+                SELECT pt.team_id
+                FROM players_teams pt
+                WHERE pt.player_id = p.id
+                ORDER BY pt.team_id DESC
+                LIMIT 1
+            ) latest ON TRUE
+            LEFT JOIN teams t ON latest.team_id = t.id
+            WHERE p.player_name ILIKE %s
+            ORDER BY p.player_name ASC
+            LIMIT 20;
+            """,
+            (search_pattern,)
+        )
+        return [dict(row) for row in cursor.fetchall()]
+    finally:
+        cursor.close()
+        conn.close()
