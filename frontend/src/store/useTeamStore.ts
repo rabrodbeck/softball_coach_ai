@@ -10,7 +10,7 @@ interface TeamState {
   userRole: 'Head Coach' | 'Assistant Coach' | null;
   isLoading: boolean;
   error: string | null;
-  activeTeamCoaches: { head_coaches: string; asistant_coaches: string } | null;
+  activeTeamCoaches: { head_coaches: string; assistant_coaches: string } | null;
 
   // Actions
   fetchTeams: (coachId: number, selectedTeamId: number | null, onSelectTeam: (team: Team) => void) => Promise<void>;

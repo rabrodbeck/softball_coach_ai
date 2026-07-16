@@ -31,7 +31,9 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
         updatePlayer,
         deletePlayer,
         setSelectedTeamId,
-        setUserRole
+        setUserRole,
+        activeTeamCoaches,
+        fetchTeamCoaches
     } = useTeamStore();
 
     // UI state
@@ -113,6 +115,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
     useEffect(() => {
         if (selectedTeamId) {
             fetchPlayers(selectedTeamId);
+            fetchTeamCoaches(selectedTeamId);
             cancelForms();
         }
     }, [selectedTeamId]);
@@ -550,12 +553,23 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                             // Roster Dashboard view
                             <>
                                 {/* Workspace Header controls */}
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-                                    <div>
-                                        <h1 style={{ margin: 0, fontSize: '24px', color: 'var(--text-h)' }}>{activeTeam?.team_name} Roster</h1>
-                                        <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                                            Record: {activeTeam?.wins}W - {activeTeam?.losses}L - {activeTeam?.ties}T
-                                        </p>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', width: '100%', marginBottom: '16px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '48px' }}>
+                                        <div>
+                                            <h1 style={{ margin: 0, fontSize: '24px', color: 'var(--text-h)' }}>{activeTeam?.team_name} Roster</h1>
+                                            <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                                                Record: {activeTeam?.wins}W - {activeTeam?.losses}L - {activeTeam?.ties}T
+                                            </p>
+                                        </div>
+                                        
+                                        {activeTeamCoaches && (
+                                            <div style={{ fontSize: '13px', color: 'var(--text-secondary)', borderLeft: '1px solid var(--border)', paddingLeft: '24px' }}>
+                                                <div><strong>Head Coach:</strong> {activeTeamCoaches.head_coaches}</div>
+                                                {activeTeamCoaches.assistant_coaches && (
+                                                    <div style={{ marginTop: '4px' }}><strong>Assistant Coach:</strong> {activeTeamCoaches.assistant_coaches}</div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                     
                                     <div style={{ display: 'flex', gap: '10px' }}>
