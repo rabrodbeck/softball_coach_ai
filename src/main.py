@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, EmailStr, field_validator
 from src.retriever import build_chain, build_agent_executor
-from src.database import get_coach_by_email, authenticate_coach, register_coach, create_team, get_coach_teams, set_active_team, update_team, add_player, get_team_players, update_player_stats, delete_player, bulk_update_player_stats, check_is_head_coach, add_coach_to_team, get_db_connection, update_player_eligibility, save_team_lineup, get_team_lineups, delete_team_lineup, add_returning_player, get_coach_players_directory, get_team_coaches
+from src.database import get_coach_by_email, authenticate_coach, register_coach, create_team, get_coach_teams, set_active_team, update_team, add_player, get_team_players, update_player_stats, delete_player, bulk_update_player_stats, check_is_head_coach, add_coach_to_team, get_db_connection, update_player_eligibility, save_team_lineup, get_team_lineups, delete_team_lineup, add_returning_player, get_coach_players_directory, get_team_coaches, search_players_global
 from src.auth import get_current_coach, verify_team_ownership
 from langchain_core.messages import HumanMessage, AIMessage
 import json
@@ -253,7 +253,6 @@ class InviteCoachRequest(BaseModel):
     coach_id: int
     email: EmailStr
     role: str
-
 
 # 2. Authentication API routes
 @app.post("/api/auth/register")
@@ -566,7 +565,17 @@ def api_add_returning_player(data: AddReturningPlayerRequest, current_coach: dic
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
-# 5. Google Auth Routes
+@app.get("/api/players/search")
+def api_search_players_global(query: str, current_coach: dict = Depends(get_current_coach)): 
+    """Searches all players in the database globally by name."""
+    if len(query.strip()) < 2:
+        return []
+    try:
+        return search_players_global(query)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+# 6. Google Auth Routes
 @app.post("/api/auth/google-login")
 def api_google_login(data: GoogleLoginRequest):
     user = get_coach_by_email(data.email)

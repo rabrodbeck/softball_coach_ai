@@ -22,7 +22,7 @@ from .players import (
     add_player,
     add_returning_player,
     get_team_players,
-    search_global_players,
+    search_players_global,
     get_coach_players_directory,
     update_player_stats,
     delete_player,
