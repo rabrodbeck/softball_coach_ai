@@ -87,7 +87,7 @@ def verify_team_ownership(team_id: int, current_coach: dict = Depends(get_curren
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT role FROM team_coaches WHERE team_id = %s AND coach_id = %s AND is_active = true LIMIT 1;",
+        cursor.execute("SELECT role FROM team_coaches WHERE team_id = %s AND coach_id = %s LIMIT 1;",
                        (team_id, current_coach["id"])
                        )
         row = cursor.fetchone()
