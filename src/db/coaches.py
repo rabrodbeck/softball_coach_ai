@@ -155,7 +155,7 @@ def get_team_coaches(team_id: int) -> list:
             WHERE tc.team_id = %s
             ORDER BY tc.role DESC, c.coach_name ASC;
             """,
-            (team_id)
+            (team_id,)
         )
         return [dict(row) for row in cursor.fetchall()]
     finally:
