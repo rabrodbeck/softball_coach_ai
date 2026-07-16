@@ -447,7 +447,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                 setTies={setTies}
                                 isActive={isActive}
                                 setIsActive={setIsActive}
-                                inningsPerGame={inningsPerGame}
+            inningsPerGame={inningsPerGame}
                                 setInningsPerGame={setInningsPerGame}
                                 onCreateTeam={handleCreateTeamSubmit}
                                 onUpdateTeam={handleUpdateTeamSubmit}
@@ -460,6 +460,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                                 cancelForms={cancelForms}
                                 teams={teams}
                                 selectedTeamId={selectedTeamId}
+                                coachId={coachId}
                                 onCreatePlayer={handleCreatePlayerSubmit}
                                 onUpdatePlayer={handleUpdatePlayerSubmit}
                                 playerName={playerName}

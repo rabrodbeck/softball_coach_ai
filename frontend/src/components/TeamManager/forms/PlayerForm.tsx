@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Player, Team } from '../types';
+import { useTeamStore } from '../../../store/useTeamStore';
 
 interface PlayerFormProps {
     editingPlayer: Player | null;
@@ -7,6 +8,7 @@ interface PlayerFormProps {
     cancelForms: () => void;
     teams: Team[];
     selectedTeamId: number | null;
+    coachId: number;
     
     // Core Form Actions
     onCreatePlayer: (e: React.FormEvent) => void;
@@ -109,6 +111,7 @@ export function PlayerForm({
     cancelForms,
     teams,
     selectedTeamId,
+    coachId,
     onCreatePlayer,
     onUpdatePlayer,
     playerName,
@@ -193,62 +196,195 @@ export function PlayerForm({
     setEligiblePositions
 }: PlayerFormProps) {
 
+    const [activeTab, setActiveTab] = useState<'new' | 'existing'>('new');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [selectedPlayer, setSelectedPlayer] = useState<any | null>(null);
+
+    const { searchPlayers, addReturningPlayer, isLoading: storeLoading } = useTeamStore();
+
+    // Trigger global search when query changes
+    useEffect(() => {
+        const delayDebounce = setTimeout(async () => {
+            if (searchQuery.trim().length >= 2) {
+                const results = await searchPlayers(searchQuery);
+                setSearchResults(results);
+            } else {
+                setSearchResults([]);
+            }
+        }, 300);
+
+        return () => clearTimeout(delayDebounce);
+    }, [searchQuery]);
+
+    // Handle adding selected returning player
+    const handleAddReturningSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!selectedPlayer || !selectedTeamId) return;
+        
+        await addReturningPlayer(coachId, selectedTeamId, selectedPlayer.id, playerNumber);
+        cancelForms();
+    };
+
     // 1. Add Player Form
     if (showAddPlayerForm) {
         return (
-            <form onSubmit={onCreatePlayer} className="add-team-form">
-                <h3>Add Player to {teams.find(t => t.id === selectedTeamId)?.team_name || 'Roster'}</h3>
-                <div className="input-group">
-                    <label>Player Name</label>
-                    <input 
-                        type="text" 
-                        value={playerName} 
-                        onChange={(e) => setPlayerName(e.target.value)} 
-                        placeholder="Sarah Jenkins" 
-                        required 
-                    />
+            <div className="add-team-form" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <h3 style={{ margin: 0 }}>Add Player to {teams.find(t => t.id === selectedTeamId)?.team_name || 'Roster'}</h3>
+                
+                {/* Tabs */}
+                <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '8px' }}>
+                    <button 
+                        type="button" 
+                        onClick={() => setActiveTab('new')} 
+                        style={{ padding: '8px 16px', background: 'none', border: 'none', borderBottom: activeTab === 'new' ? '2px solid var(--accent)' : 'none', color: activeTab === 'new' ? 'var(--accent)' : 'var(--text-secondary)', fontWeight: 'bold', cursor: 'pointer' }}
+                    >
+                        Create New Player
+                    </button>
+                    <button 
+                        type="button" 
+                        onClick={() => setActiveTab('existing')} 
+                        style={{ padding: '8px 16px', background: 'none', border: 'none', borderBottom: activeTab === 'existing' ? '2px solid var(--accent)' : 'none', color: activeTab === 'existing' ? 'var(--accent)' : 'var(--text-secondary)', fontWeight: 'bold', cursor: 'pointer' }}
+                    >
+                        Search Existing Players
+                    </button>
                 </div>
-                <div className="form-row-double" style={{ display: 'flex', gap: '12px' }}>
-                    <div className="input-group" style={{ flex: 1 }}>
-                        <label>Jersey Number</label>
-                        <input 
-                            type="number" 
-                            min="0" 
-                            max="99" 
-                            value={playerNumber} 
-                            onChange={(e) => setPlayerNumber(parseInt(e.target.value) || 0)} 
-                            required 
-                        />
-                    </div>
-                    <div className="input-group" style={{ flex: 1 }}>
-                        <label>Bats</label>
-                        <select 
-                            value={battingHand} 
-                            onChange={(e) => setBattingHand(e.target.value)} 
-                            style={{ padding: '12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)' }}
-                        >
-                            <option value="Right">Right</option>
-                            <option value="Left">Left</option>
-                            <option value="Switch">Switch</option>
-                        </select>
-                    </div>
-                    <div className="input-group" style={{ flex: 1 }}>
-                        <label>Throws</label>
-                        <select 
-                            value={throwingHand} 
-                            onChange={(e) => setThrowingHand(e.target.value)} 
-                            style={{ padding: '12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)' }}
-                        >
-                            <option value="Right">Right</option>
-                            <option value="Left">Left</option>
-                        </select>
-                    </div>
-                </div>
-                <div className="form-actions" style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
-                    <button type="submit" className="btn-primary" style={{ flex: 1 }}>Add Player</button>
-                    <button type="button" onClick={cancelForms} className="btn-secondary" style={{ flex: 1 }}>Cancel</button>
-                </div>
-            </form>
+
+                {activeTab === 'new' ? (
+                    /* Tab 1: New Player Form */
+                    <form onSubmit={onCreatePlayer} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        <div className="input-group">
+                            <label>Player Name</label>
+                            <input 
+                                type="text" 
+                                value={playerName} 
+                                onChange={(e) => setPlayerName(e.target.value)} 
+                                placeholder="Sarah Jenkins" 
+                                required 
+                            />
+                        </div>
+                        <div className="form-row-double" style={{ display: 'flex', gap: '12px' }}>
+                            <div className="input-group" style={{ flex: 1 }}>
+                                <label>Jersey Number</label>
+                                <input 
+                                    type="number" 
+                                    min="0" 
+                                    max="99" 
+                                    value={playerNumber} 
+                                    onChange={(e) => setPlayerNumber(parseInt(e.target.value) || 0)} 
+                                    required 
+                                />
+                            </div>
+                            <div className="input-group" style={{ flex: 1 }}>
+                                <label>Bats</label>
+                                <select 
+                                    value={battingHand} 
+                                    onChange={(e) => setBattingHand(e.target.value)} 
+                                    style={{ padding: '12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)' }}
+                                >
+                                    <option value="Right">Right</option>
+                                    <option value="Left">Left</option>
+                                    <option value="Switch">Switch</option>
+                                </select>
+                            </div>
+                            <div className="input-group" style={{ flex: 1 }}>
+                                <label>Throws</label>
+                                <select 
+                                    value={throwingHand} 
+                                    onChange={(e) => setThrowingHand(e.target.value)} 
+                                    style={{ padding: '12px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--code-bg)', color: 'var(--text-h)' }}
+                                >
+                                    <option value="Right">Right</option>
+                                    <option value="Left">Left</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="form-actions" style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+                            <button type="submit" className="btn-primary" style={{ flex: 1 }}>Add Player</button>
+                            <button type="button" onClick={cancelForms} className="btn-secondary" style={{ flex: 1 }}>Cancel</button>
+                        </div>
+                    </form>
+                ) : (
+                    /* Tab 2: Search/Add Returning Player Form */
+                    <form onSubmit={handleAddReturningSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {!selectedPlayer ? (
+                            <div className="input-group">
+                                <label>Search Career Directory (by name)</label>
+                                <input 
+                                    type="text" 
+                                    value={searchQuery} 
+                                    onChange={(e) => setSearchQuery(e.target.value)} 
+                                    placeholder="Type player name..." 
+                                    required={!selectedPlayer}
+                                />
+                                
+                                {searchResults.length > 0 && (
+                                    <div style={{ marginTop: '8px', maxHeight: '180px', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--code-bg)' }}>
+                                        {searchResults.map(p => (
+                                            <div 
+                                                key={p.id} 
+                                                onClick={() => setSelectedPlayer(p)} 
+                                                style={{ padding: '10px 14px', cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.05)', fontSize: '13px', textAlign: 'left', transition: 'background 0.15s ease' }}
+                                                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                                                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                                            >
+                                                <strong style={{ color: 'var(--accent)' }}>{p.player_name}</strong> 
+                                                <span style={{ color: 'var(--text-secondary)', marginLeft: '6px' }}>
+                                                    {p.team_name ? `(${p.team_name} — ${p.season})` : '(No previous team)'}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <div style={{ padding: '14px', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--accent-bg)', fontSize: '13px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div>
+                                    <span style={{ color: 'var(--text-secondary)' }}>Selected Player:</span>
+                                    <strong style={{ display: 'block', fontSize: '15px', color: 'var(--accent)', marginTop: '4px' }}>{selectedPlayer.player_name}</strong>
+                                    <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                                        Bats: {selectedPlayer.batting_hand} | Throws: {selectedPlayer.throwing_hand}
+                                    </span>
+                                </div>
+                                <button 
+                                    type="button" 
+                                    onClick={() => { setSelectedPlayer(null); setSearchQuery(''); }} 
+                                    style={{ background: 'none', border: 'none', color: '#ff6b6b', fontSize: '12px', cursor: 'pointer', fontWeight: 'bold' }}
+                                >
+                                    Change
+                                </button>
+                            </div>
+                        )}
+
+                        {selectedPlayer && (
+                            <div className="input-group">
+                                <label>Jersey Number for {teams.find(t => t.id === selectedTeamId)?.team_name || 'Roster'}</label>
+                                <input 
+                                    type="number" 
+                                    min="0" 
+                                    max="99" 
+                                    value={playerNumber} 
+                                    onChange={(e) => setPlayerNumber(parseInt(e.target.value) || 0)} 
+                                    placeholder="Enter jersey number"
+                                    required 
+                                />
+                            </div>
+                        )}
+
+                        <div className="form-actions" style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+                            <button 
+                                type="submit" 
+                                className="btn-primary" 
+                                style={{ flex: 1 }} 
+                                disabled={!selectedPlayer || storeLoading}
+                            >
+                                {storeLoading ? 'Adding...' : 'Add to Roster'}
+                            </button>
+                            <button type="button" onClick={cancelForms} className="btn-secondary" style={{ flex: 1 }}>Cancel</button>
+                        </div>
+                    </form>
+                )}
+            </div>
         );
     }
 

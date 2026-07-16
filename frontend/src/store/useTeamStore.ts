@@ -57,6 +57,7 @@ interface TeamState {
     playerData: any
   ) => Promise<void>;
   deletePlayer: (coachId: number, playerId: number) => Promise<void>;
+  searchPlayers: (query: string) => Promise<any[]>;
   setSelectedTeamId: (teamId: number | null) => void;
   setUserRole: (role: 'Head Coach' | 'Assistant Coach' | null) => void;
 }
@@ -303,6 +304,19 @@ export const useTeamStore = create<TeamState>((set, get) => ({
     } finally {
       set({ isLoading: false });
     }
+  },
+
+  searchPlayers: async (query) => {
+    if (!query || query.trim().length < 2) return [];
+    try {
+      const response = await apiFetch(`/api/players/search?query=${encodeURIComponent(query)}`);
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (err) {
+      console.error("Failed to search players:", err);
+    }
+    return [];
   },
 
   setSelectedTeamId: (teamId) => set({ selectedTeamId: teamId }),
