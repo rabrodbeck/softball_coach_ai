@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, EmailStr, field_validator
 from src.retriever import build_chain, build_agent_executor
-from src.database import get_coach_by_email, authenticate_coach, register_coach, create_team, get_coach_teams, set_active_team, update_team, add_player, get_team_players, update_player_stats, delete_player, bulk_update_player_stats, check_is_head_coach, add_coach_to_team, get_db_connection, update_player_eligibility, save_team_lineup, get_team_lineups, delete_team_lineup
+from src.database import get_coach_by_email, authenticate_coach, register_coach, create_team, get_coach_teams, set_active_team, update_team, add_player, get_team_players, update_player_stats, delete_player, bulk_update_player_stats, check_is_head_coach, add_coach_to_team, get_db_connection, update_player_eligibility, save_team_lineup, get_team_lineups, delete_team_lineup, add_returning_player, get_coach_players_directory
 from src.auth import get_current_coach, verify_team_ownership
 from langchain_core.messages import HumanMessage, AIMessage
 import json
@@ -111,6 +111,7 @@ class PlayerRequest(BaseModel):
 
 class PlayerUpdateRequest(BaseModel):
     coach_id: int
+    team_id: int
     player_name: str
     player_number: int
     batting_hand: str
@@ -174,6 +175,12 @@ class PlayerUpdateRequest(BaseModel):
     @classmethod
     def validate_innings(cls, v: float) -> float:
         return check_innings_decimal(v)
+
+class AddReturningPlayerRequest(BaseModel):
+    coach_id: int
+    team_id: int
+    player_id: int
+    player_number: int
 
 class BulkImportPlayer(BaseModel):
     player_name: str
@@ -477,20 +484,9 @@ def api_update_player(player_id: int, data: PlayerUpdateRequest, current_coach: 
     if data.coach_id != current_coach["id"]:
         raise HTTPException(status_code=403, detail="Unauthorized coach ID.")
     
-    # Retrieve the player's team_id to verify coach ownership
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute("SELECT team_id FROM players WHERE id = %s LIMIT 1;", (player_id,))
-        row = cursor.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Player not found.")
-        team_id = row["team_id"]
-    finally:
-        cursor.close()
-        conn.close()
-        
-    verify_team_ownership(team_id, current_coach)
+    # Verify coach ownership of the target team submitted in request
+    verify_team_ownership(data.team_id, current_coach)
+    
     try:
         updated = update_player_stats(current_coach["id"], player_id, dict(data))
         if not updated:
@@ -502,28 +498,15 @@ def api_update_player(player_id: int, data: PlayerUpdateRequest, current_coach: 
         raise HTTPException(status_code=500, detail=str(e))
     
 @app.delete("/api/players/{player_id}")
-def api_delete_player(player_id: int, coach_id: int, current_coach: dict = Depends(get_current_coach)):
+def api_delete_player(player_id: int, coach_id: int, team_id: int, current_coach: dict = Depends(get_current_coach)):
     if coach_id != current_coach["id"]:
         raise HTTPException(status_code=403, detail="Unauthorized coach ID.")
         
-    # Retrieve the player's team_id to verify coach ownership
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute("SELECT team_id FROM players WHERE id = %s LIMIT 1;", (player_id,))
-        row = cursor.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="Player not found.")
-        team_id = row["team_id"]
-    finally:
-        cursor.close()
-        conn.close()
-        
     verify_team_ownership(team_id, current_coach)
     try:
-        success = delete_player(current_coach["id"], player_id)
+        success = delete_player(current_coach["id"], player_id, team_id)
         if not success:
-            raise HTTPException(status_code=404, detail="Player not found.")
+            raise HTTPException(status_code=404, detail="Player not found on this team.")
         return {"success": True}
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
@@ -539,6 +522,30 @@ def api_bulk_update_players(data: BulkImportRequest, current_coach: dict = Depen
         player_data = [dict(p) for p in data.players]
         updated = bulk_update_player_stats(current_coach["id"], data.team_id, player_data)
         return updated
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@app.get("/api/players/directory")
+def api_get_coach_players_directory(current_coach: dict = Depends(get_current_coach)):
+    """Fetches a unique list of all players created by the coach across all teams."""
+    try:
+        return get_coach_players_directory(current_coach["id"])
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/players/returning")
+def api_add_returning_player(data: AddReturningPlayerRequest, current_coach: dict = Depends(get_current_coach)):
+    """Links an existing career player to a new team roster."""
+    if data.coach_id != current_coach["id"]:
+        raise HTTPException(status_code=403, detail="Unauthorized coach ID.")
+    verify_team_ownership(data.team_id, current_coach)
+    try:
+        result = add_returning_player(current_coach["id"], data.team_id, data.player_id, data.player_number)
+        if not result:
+            raise HTTPException(status_code=500, detail="Failed to add returning player.")
+        return result
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except Exception as e:
