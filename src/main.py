@@ -504,10 +504,13 @@ def api_search_players_global(query: str, current_coach: dict = Depends(get_curr
         raise HTTPException(status_code=500, detail=str(e))
     
 @app.get("/api/players/{team_id}")
-def api_get_roster(team_id: int, current_coach: dict = Depends(get_current_coach), role: str = Depends(verify_team_ownership)):
+def api_get_roster(team_id: int, scope: str = "season", current_coach: dict = Depends(get_current_coach), role: str = Depends(verify_team_ownership)):
     try:
-        roster = get_team_players(team_id)
-        return roster
+        if scope == "career":
+            from src.db.players import get_team_players_career
+            roster = get_team_players_career(team_id)
+        else:
+            roster = get_team_players(team_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     

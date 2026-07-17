@@ -14,7 +14,7 @@ interface TeamState {
 
   // Actions
   fetchTeams: (coachId: number, selectedTeamId: number | null, onSelectTeam: (team: Team) => void) => Promise<void>;
-  fetchPlayers: (teamId: number) => Promise<void>;
+  fetchPlayers: (teamId: number, scope?: 'season' | 'career') => Promise<void>;
   fetchPlayerDirectory: () => Promise<void>;
   fetchTeamCoaches: (teamId: number) => Promise<void>;
   createTeam: (
@@ -103,10 +103,11 @@ export const useTeamStore = create<TeamState>((set, get) => ({
     }
   },
 
-  fetchPlayers: async (teamId) => {
+  fetchPlayers: async (teamId, scope) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await apiFetch(`/api/players/${teamId}`);
+      const scopeParam = scope || 'season';
+      const response = await apiFetch(`/api/players/${teamId}?scope=${scopeParam}`);
       if (response.ok) {
         const data = await response.json();
         set({ players: data });
