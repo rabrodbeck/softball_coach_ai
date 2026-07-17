@@ -678,7 +678,7 @@ def search_players_global(query_str: str) -> list:
         search_pattern = f"%{query_str.strip()}%"
         cursor.execute(
             """
-            SELECT p.id, p.player_name, p.batting_hand, p.throwing_hand, p.eligible_postitions, t.team_name, t.season
+            SELECT p.id, p.player_name, p.batting_hand, p.throwing_hand, p.eligible_positions, t.team_name, t.season
             FROM players p
             LEFT JOIN LATERAL (
                 SELECT pt.team_id

@@ -485,6 +485,24 @@ def api_add_player(data: PlayerRequest, current_coach: dict = Depends(get_curren
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
+@app.get("/api/players/directory")
+def api_get_coach_players_directory(current_coach: dict = Depends(get_current_coach)):
+    """Fetches a unique list of all players created by the coach across all teams."""
+    try:
+        return get_coach_players_directory(current_coach["id"])
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@app.get("/api/players/search")
+def api_search_players_global(query: str, current_coach: dict = Depends(get_current_coach)): 
+    """Searches all players in the database globally by name."""
+    if len(query.strip()) < 2:
+        return []
+    try:
+        return search_players_global(query)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
 @app.get("/api/players/{team_id}")
 def api_get_roster(team_id: int, current_coach: dict = Depends(get_current_coach), role: str = Depends(verify_team_ownership)):
     try:
@@ -541,14 +559,6 @@ def api_bulk_update_players(data: BulkImportRequest, current_coach: dict = Depen
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
-@app.get("/api/players/directory")
-def api_get_coach_players_directory(current_coach: dict = Depends(get_current_coach)):
-    """Fetches a unique list of all players created by the coach across all teams."""
-    try:
-        return get_coach_players_directory(current_coach["id"])
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
 @app.post("/api/players/returning")
 def api_add_returning_player(data: AddReturningPlayerRequest, current_coach: dict = Depends(get_current_coach)):
     """Links an existing career player to a new team roster."""
@@ -563,17 +573,7 @@ def api_add_returning_player(data: AddReturningPlayerRequest, current_coach: dic
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    
-@app.get("/api/players/search")
-def api_search_players_global(query: str, current_coach: dict = Depends(get_current_coach)): 
-    """Searches all players in the database globally by name."""
-    if len(query.strip()) < 2:
-        return []
-    try:
-        return search_players_global(query)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e))    
     
 # 6. Google Auth Routes
 @app.post("/api/auth/google-login")
