@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { Player, Team } from '../types';
 import { useTeamStore } from '../../../store/useTeamStore';
+import { ArrowLeft } from 'lucide-react';
 
 interface PlayerFormProps {
     editingPlayer: Player | null;
@@ -230,7 +231,30 @@ export function PlayerForm({
     if (showAddPlayerForm) {
         return (
             <div className="add-team-form" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <h3 style={{ margin: 0 }}>Add Player to {teams.find(t => t.id === selectedTeamId)?.team_name || 'Roster'}</h3>
+                {/* Header with Back Button */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <button 
+                        type="button" 
+                        onClick={cancelForms} 
+                        style={{ 
+                            background: 'none', 
+                            border: 'none', 
+                            color: 'var(--text-secondary)', 
+                            cursor: 'pointer', 
+                            padding: '4px 0', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center',
+                            transition: 'color 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.color = 'var(--text-h)'}
+                        onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
+                        title="Back to Roster"
+                    >
+                        <ArrowLeft size={20} />
+                    </button>
+                    <h3 style={{ margin: 0 }}>Add Player to {teams.find(t => t.id === selectedTeamId)?.team_name || 'Roster'}</h3>
+                </div>
                 
                 {/* Tabs */}
                 <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '8px' }}>
@@ -392,7 +416,30 @@ export function PlayerForm({
     if (editingPlayer) {
         return (
             <form onSubmit={onUpdatePlayer} className="add-team-form">
-                <h3>Edit Player & Stats</h3>
+                {/* Header with Back Button */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                    <button 
+                        type="button" 
+                        onClick={cancelForms} 
+                        style={{ 
+                            background: 'none', 
+                            border: 'none', 
+                            color: 'var(--text-secondary)', 
+                            cursor: 'pointer', 
+                            padding: '4px 0', 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            justifyContent: 'center',
+                            transition: 'color 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.color = 'var(--text-h)'}
+                        onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
+                        title="Back to Roster"
+                    >
+                        <ArrowLeft size={20} />
+                    </button>
+                    <h3 style={{ margin: 0 }}>Edit Player & Stats</h3>
+                </div>
                 <div className="form-row-double" style={{ display: 'flex', gap: '12px' }}>
                     <div className="input-group" style={{ flex: 2 }}>
                         <label>Player Name</label>
