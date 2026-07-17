@@ -700,152 +700,153 @@ def search_players_global(query_str: str) -> list:
         conn.close()
 
 def get_team_players_career(team_id: int) -> list:
-    """Retrieves all players on a team with their career-aggregated statistics across all seasons/teams."""
+    """Retrieves all players on a team with their career-aggregated statistics across all seasons/teams.
+    Optimized to run in a single SQL query instead of sequential loop queries.
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        # 1. Fetch the base player details currently on this team
-        cursor.execute(
+        # Helper to generate SQL snippet for fractional innings summation
+        def sql_sum_fractional(col_name: str) -> str:
+            return f"""
+            COALESCE(
+                FLOOR(SUM(FLOOR(COALESCE({col_name}, 0)) * 3 + ROUND((COALESCE({col_name}, 0) - FLOOR(COALESCE({col_name}, 0))) * 10)) / 3) + 
+                (CAST(SUM(FLOOR(COALESCE({col_name}, 0)) * 3 + ROUND((COALESCE({col_name}, 0) - FLOOR(COALESCE({col_name}, 0))) * 10)) AS INTEGER) %% 3) / 10.0,
+                0.0
+            )
             """
-            SELECT 
-                p.id, 
-                pt.team_id, 
-                p.player_name, 
-                pt.player_number, 
-                p.batting_hand, 
-                p.throwing_hand, 
-                p.parent_player_id, 
-                p.created_at, 
-                p.updated_at, 
-                p.eligible_positions,
-                COALESCE(t.innings_per_game, 7) as innings_per_game
-            FROM players p
-            JOIN players_teams pt ON p.id = pt.player_id
-            LEFT JOIN teams t ON pt.team_id = t.id
-            WHERE pt.team_id = %s
-            ORDER BY p.player_name ASC;
-            """,
-            (team_id,)
-        )
-        base_players = cursor.fetchall()
-        
-        from src.db.metrics import calculate_derived_stats, add_fractional_innings
-        
-        roster_career = []
-        for bp in base_players:
-            player_id = bp["id"]
-            player_dict = dict(bp)
-            
-            # --- Aggregate games_played across all teams ---
-            cursor.execute("SELECT COALESCE(SUM(games_played), 0) as games_played FROM players_teams WHERE player_id = %s;", (player_id,))
-            player_dict["games_played"] = cursor.fetchone()["games_played"]
-            
-            # --- Aggregate Offensive Stats ---
-            cursor.execute(
-                """
-                SELECT 
-                    COALESCE(SUM(plate_appearances), 0) as plate_appearances,
-                    COALESCE(SUM(at_bats), 0) as at_bats,
-                    COALESCE(SUM(singles), 0) as singles,
-                    COALESCE(SUM(doubles), 0) as doubles,
-                    COALESCE(SUM(triples), 0) as triples,
-                    COALESCE(SUM(home_runs), 0) as home_runs,
-                    COALESCE(SUM(walks), 0) as walks,
-                    COALESCE(SUM(strikeouts), 0) as strikeouts,
-                    COALESCE(SUM(hit_by_pitches), 0) as hit_by_pitches,
-                    COALESCE(SUM(stolen_bases), 0) as stolen_bases,
-                    COALESCE(SUM(caught_stealing), 0) as caught_stealing,
-                    COALESCE(SUM(runs_scored), 0) as runs_scored,
-                    COALESCE(SUM(runs_batted_in), 0) as runs_batted_in,
-                    COALESCE(SUM(reached_on_error), 0) as reached_on_error
-                FROM offensive_stats WHERE player_id = %s;
-                """,
-                (player_id,)
-            )
-            o_row = cursor.fetchone()
-            player_dict.update(dict(o_row))
-            
-            # --- Aggregate Pitching Stats (Standard Columns) ---
-            cursor.execute(
-                """
-                SELECT 
-                    COALESCE(SUM(games_pitched), 0) as games_pitched,
-                    COALESCE(SUM(games_started), 0) as games_started,
-                    COALESCE(SUM(batters_faced), 0) as batters_faced,
-                    COALESCE(SUM(number_of_pitches), 0) as number_of_pitches,
-                    COALESCE(SUM(hits), 0) as hits_allowed,
-                    COALESCE(SUM(runs), 0) as runs_allowed,
-                    COALESCE(SUM(earned_runs), 0) as earned_runs,
-                    COALESCE(SUM(walks), 0) as walks_allowed,
-                    COALESCE(SUM(strikeouts), 0) as strikeouts_thrown,
-                    COALESCE(SUM(hit_by_pitches), 0) as hit_by_pitches_allowed,
-                    COALESCE(SUM(left_on_base), 0) as left_on_base
-                FROM pitching_stats WHERE player_id = %s;
-                """,
-                (player_id,)
-            )
-            p_row = cursor.fetchone()
-            player_dict.update(dict(p_row))
-            
-            # Sum pitching innings_pitched with fractional summation
-            cursor.execute("SELECT innings_pitched FROM pitching_stats WHERE player_id = %s;", (player_id,))
-            ip_vals = [r["innings_pitched"] for r in cursor.fetchall() if r["innings_pitched"]]
-            tot_ip = 0.0
-            for ip in ip_vals:
-                tot_ip = add_fractional_innings(tot_ip, ip)
-            player_dict["innings_pitched"] = tot_ip
-            
-            # --- Aggregate Catching Stats ---
-            cursor.execute(
-                """
-                SELECT 
-                    COALESCE(SUM(passed_balls_allowed), 0) as passed_balls_allowed,
-                    COALESCE(SUM(runners_stolen_bases), 0) as runners_stolen_bases,
-                    COALESCE(SUM(runners_caught_stealing), 0) as runners_caught_stealing
-                FROM catching_stats WHERE player_id = %s;
-                """,
-                (player_id,)
-            )
-            c_row = cursor.fetchone()
-            player_dict.update(dict(c_row))
-            
-            # Sum innings_caught with fractional summation
-            cursor.execute("SELECT innings_caught FROM catching_stats WHERE player_id = %s;", (player_id,))
-            ic_vals = [r["innings_caught"] for r in cursor.fetchall() if r["innings_caught"]]
-            tot_ic = 0.0
-            for ic in ic_vals:
-                tot_ic = add_fractional_innings(tot_ic, ic)
-            player_dict["innings_caught"] = tot_ic
 
-            # --- Aggregate Defensive Stats ---
-            cursor.execute(
-                """
-                SELECT 
-                    COALESCE(SUM(total_chances), 0) as total_chances,
-                    COALESCE(SUM(assists), 0) as assists,
-                    COALESCE(SUM(putouts), 0) as putouts,
-                    COALESCE(SUM(errors), 0) as errors
-                FROM defensive_stats WHERE player_id = %s;
-                """,
-                (player_id,)
-            )
-            d_row = cursor.fetchone()
-            player_dict.update(dict(d_row))
+        query = f"""
+        SELECT 
+            p.id, pt.team_id, p.player_name, pt.player_number, p.batting_hand, p.throwing_hand, p.parent_player_id, p.created_at, p.updated_at, p.eligible_positions,
+            COALESCE(t.innings_per_game, 7) as innings_per_game,
+            COALESCE(gp_agg.games_played, 0) as games_played,
             
-            # Sum position-specific innings with fractional summation
-            pos_cols = ['innings_p', 'innings_c', 'innings_1b', 'innings_2b', 'innings_3b', 'innings_ss', 'innings_lf', 'innings_cf', 'innings_rf']
-            for col in pos_cols:
-                cursor.execute(f"SELECT {col} FROM defensive_stats WHERE player_id = %s;", (player_id,))
-                pos_vals = [r[col] for r in cursor.fetchall() if r[col]]
-                tot_pos = 0.0
-                for pv in pos_vals:
-                    tot_pos = add_fractional_innings(tot_pos, pv)
-                player_dict[col] = tot_pos
-                
-            # Calculate derived stats (BA, OBP, FPCT, etc.) and add to roster
-            roster_career.append(calculate_derived_stats(player_dict))
+            COALESCE(o.plate_appearances, 0) as plate_appearances,
+            COALESCE(o.at_bats, 0) as at_bats,
+            COALESCE(o.singles, 0) as singles,
+            COALESCE(o.doubles, 0) as doubles,
+            COALESCE(o.triples, 0) as triples,
+            COALESCE(o.home_runs, 0) as home_runs,
+            COALESCE(o.walks, 0) as walks,
+            COALESCE(o.strikeouts, 0) as strikeouts,
+            COALESCE(o.hit_by_pitches, 0) as hit_by_pitches,
+            COALESCE(o.stolen_bases, 0) as stolen_bases,
+            COALESCE(o.caught_stealing, 0) as caught_stealing,
+            COALESCE(o.runs_scored, 0) as runs_scored,
+            COALESCE(o.runs_batted_in, 0) as runs_batted_in,
+            COALESCE(o.reached_on_error, 0) as reached_on_error,
             
-        return roster_career
+            COALESCE(ps.games_pitched, 0) as games_pitched,
+            COALESCE(ps.games_started, 0) as games_started,
+            COALESCE(ps.batters_faced, 0) as batters_faced,
+            COALESCE(ps.number_of_pitches, 0) as number_of_pitches,
+            COALESCE(ps.hits_allowed, 0) as hits_allowed,
+            COALESCE(ps.runs_allowed, 0) as runs_allowed,
+            COALESCE(ps.earned_runs, 0) as earned_runs,
+            COALESCE(ps.walks_allowed, 0) as walks_allowed,
+            COALESCE(ps.strikeouts_thrown, 0) as strikeouts_thrown,
+            COALESCE(ps.hit_by_pitches_allowed, 0) as hit_by_pitches_allowed,
+            COALESCE(ps.left_on_base, 0) as left_on_base,
+            COALESCE(ps.innings_pitched, 0.0) as innings_pitched,
+            
+            COALESCE(c.passed_balls_allowed, 0) as passed_balls_allowed,
+            COALESCE(c.runners_stolen_bases, 0) as runners_stolen_bases,
+            COALESCE(c.runners_caught_stealing, 0) as runners_caught_stealing,
+            COALESCE(c.innings_caught, 0.0) as innings_caught,
+            
+            COALESCE(d.total_chances, 0) as total_chances,
+            COALESCE(d.assists, 0) as assists,
+            COALESCE(d.putouts, 0) as putouts,
+            COALESCE(d.errors, 0) as errors,
+            COALESCE(d.innings_p, 0.0) as innings_p,
+            COALESCE(d.innings_c, 0.0) as innings_c,
+            COALESCE(d.innings_1b, 0.0) as innings_1b,
+            COALESCE(d.innings_2b, 0.0) as innings_2b,
+            COALESCE(d.innings_3b, 0.0) as innings_3b,
+            COALESCE(d.innings_ss, 0.0) as innings_ss,
+            COALESCE(d.innings_lf, 0.0) as innings_lf,
+            COALESCE(d.innings_cf, 0.0) as innings_cf,
+            COALESCE(d.innings_rf, 0.0) as innings_rf
+        FROM players p
+        JOIN players_teams pt ON p.id = pt.player_id
+        LEFT JOIN teams t ON pt.team_id = t.id
+        LEFT JOIN (
+            SELECT player_id, SUM(games_played) as games_played
+            FROM players_teams
+            GROUP BY player_id
+        ) gp_agg ON p.id = gp_agg.player_id
+        LEFT JOIN (
+            SELECT player_id,
+                SUM(plate_appearances) as plate_appearances,
+                SUM(at_bats) as at_bats,
+                SUM(singles) as singles,
+                SUM(doubles) as doubles,
+                SUM(triples) as triples,
+                SUM(home_runs) as home_runs,
+                SUM(walks) as walks,
+                SUM(strikeouts) as strikeouts,
+                SUM(hit_by_pitches) as hit_by_pitches,
+                SUM(stolen_bases) as stolen_bases,
+                SUM(caught_stealing) as caught_stealing,
+                SUM(runs_scored) as runs_scored,
+                SUM(runs_batted_in) as runs_batted_in,
+                SUM(reached_on_error) as reached_on_error
+            FROM offensive_stats
+            GROUP BY player_id
+        ) o ON p.id = o.player_id
+        LEFT JOIN (
+            SELECT player_id,
+                SUM(games_pitched) as games_pitched,
+                SUM(games_started) as games_started,
+                SUM(batters_faced) as batters_faced,
+                SUM(number_of_pitches) as number_of_pitches,
+                SUM(hits) as hits_allowed,
+                SUM(runs) as runs_allowed,
+                SUM(earned_runs) as earned_runs,
+                SUM(walks) as walks_allowed,
+                SUM(strikeouts) as strikeouts_thrown,
+                SUM(hit_by_pitches) as hit_by_pitches_allowed,
+                SUM(left_on_base) as left_on_base,
+                {sql_sum_fractional('innings_pitched')} as innings_pitched
+            FROM pitching_stats
+            GROUP BY player_id
+        ) ps ON p.id = ps.player_id
+        LEFT JOIN (
+            SELECT player_id,
+                SUM(passed_balls_allowed) as passed_balls_allowed,
+                SUM(runners_stolen_bases) as runners_stolen_bases,
+                SUM(runners_caught_stealing) as runners_caught_stealing,
+                {sql_sum_fractional('innings_caught')} as innings_caught
+            FROM catching_stats
+            GROUP BY player_id
+        ) c ON p.id = c.player_id
+        LEFT JOIN (
+            SELECT player_id,
+                SUM(total_chances) as total_chances,
+                SUM(assists) as assists,
+                SUM(putouts) as putouts,
+                SUM(errors) as errors,
+                {sql_sum_fractional('innings_p')} as innings_p,
+                {sql_sum_fractional('innings_c')} as innings_c,
+                {sql_sum_fractional('innings_1b')} as innings_1b,
+                {sql_sum_fractional('innings_2b')} as innings_2b,
+                {sql_sum_fractional('innings_3b')} as innings_3b,
+                {sql_sum_fractional('innings_ss')} as innings_ss,
+                {sql_sum_fractional('innings_lf')} as innings_lf,
+                {sql_sum_fractional('innings_cf')} as innings_cf,
+                {sql_sum_fractional('innings_rf')} as innings_rf
+            FROM defensive_stats
+            GROUP BY player_id
+        ) d ON p.id = d.player_id
+        WHERE pt.team_id = %s
+        ORDER BY p.player_name ASC;
+        """
+        cursor.execute(query, (team_id,))
+        rows = cursor.fetchall()
+        
+        from src.db.metrics import calculate_derived_stats
+        return [calculate_derived_stats(dict(row)) for row in rows]
     finally:
         cursor.close()
         conn.close()

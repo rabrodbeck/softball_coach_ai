@@ -112,14 +112,20 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
         fetchTeams(coachId, selectedTeamId, onSelectTeam);
     }, []);
 
-    // Load players when team changes
+    // Load coaches and reset forms when team changes
     useEffect(() => {
         if (selectedTeamId) {
-            fetchPlayers(selectedTeamId);
             fetchTeamCoaches(selectedTeamId);
             cancelForms();
         }
     }, [selectedTeamId]);
+
+    // Fetch players roster when team changes or stats toggle is switched
+    useEffect(() => {
+        if (selectedTeamId) {
+            fetchPlayers(selectedTeamId, statsMode);
+        }
+    }, [selectedTeamId, statsMode]);
 
     // Update store state when parent passes new team
     const handleSelectActiveTeam = (team: Team) => {

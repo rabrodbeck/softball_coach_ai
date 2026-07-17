@@ -511,6 +511,7 @@ def api_get_roster(team_id: int, scope: str = "season", current_coach: dict = De
             roster = get_team_players_career(team_id)
         else:
             roster = get_team_players(team_id)
+        return roster
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
