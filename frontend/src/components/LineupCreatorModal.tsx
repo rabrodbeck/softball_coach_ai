@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Save, Shield, AlertCircle } from 'lucide-react';
 import { apiFetch } from '../utils/api';
 
@@ -45,6 +45,64 @@ export default function LineupCreatorModal({ teamId, teamName, inningsPerGame, o
     
     const [assignments, setAssignments] = useState<Record<number, Record<string, number | null>>>({});
     const [draggedPlayerId, setDraggedPlayerId] = useState<number | null>(null);
+
+    // Heights and scroll sync refs
+    const [topPanelHeight, setTopPanelHeight] = useState(300); // Default top panel height in pixels
+    const topScrollRef = useRef<HTMLDivElement | null>(null);
+    const bottomScrollRef = useRef<HTMLDivElement | null>(null);
+    const isResizingRef = useRef(false);
+
+    // Synchronize horizontal scrolling between the top and bottom tables
+    const handleTopScroll = () => {
+        if (topScrollRef.current && bottomScrollRef.current) {
+            bottomScrollRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+        }
+    };
+
+    const handleBottomScroll = () => {
+        if (topScrollRef.current && bottomScrollRef.current) {
+            topScrollRef.current.scrollLeft = bottomScrollRef.current.scrollLeft;
+        }
+    };
+
+    // Resizing mouse down handler
+    const handleMouseDown = (e: React.MouseEvent) => {
+        e.preventDefault();
+        isResizingRef.current = true;
+        document.body.style.cursor = 'row-resize';
+        document.body.style.userSelect = 'none';
+    };
+
+    // Listeners for dragging the resize handle
+    useEffect(() => {
+        const handleMouseMove = (e: MouseEvent) => {
+            if (!isResizingRef.current) return;
+
+            const rightPanel = topScrollRef.current?.parentElement;
+            if (rightPanel) {
+                const rect = rightPanel.getBoundingClientRect();
+                // Compute new height based on mouse position relative to container
+                const newHeight = e.clientY - rect.top;
+                // Bound the height between 120px and (total container height - 120px) to prevent layout breakages
+                setTopPanelHeight(Math.max(120, Math.min(newHeight, rect.height - 120)));
+            }
+        };
+
+        const handleMouseUp = () => {
+            if (isResizingRef.current) {
+                isResizingRef.current = false;
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+            }
+        };
+
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, []);
 
     // Fetch team players on load
     useEffect(() => {
@@ -316,107 +374,370 @@ export default function LineupCreatorModal({ teamId, teamName, inningsPerGame, o
                         {/* Right Panel: Lineup Grid & Pool */}
                         <div style={{ flex: 1, minWidth: '0', display: 'flex', flexDirection: 'column', gap: '12px', minHeight: 0 }}>
                             {/* Interactive Grid Scroll Container */}
-                            <div style={{ flex: 1, overflowX: 'auto', overflowY: 'auto', border: '1px solid var(--border)', borderRadius: '10px', background: 'var(--bg)' }}>
-                            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: `${150 + inningsCount * 180}px` }}>
-                                <thead>
-                                    <tr style={{ background: 'var(--code-bg)', borderBottom: '2px solid var(--border)', position: 'sticky', top: 0, zIndex: 10 }}>
-                                        <th style={{ 
-                                            padding: '6px 10px', 
-                                            color: 'var(--text-h)', 
-                                            fontWeight: 'bold', 
-                                            width: '150px', 
-                                            borderRight: '1px solid var(--border)', 
-                                            background: 'var(--code-bg)',
-                                            position: 'sticky',
-                                            top: 0,
-                                            left: 0,
-                                            zIndex: 20,
-                                            fontSize: '11px'
-                                        }}>POSITION</th>
-                                        {Array.from({ length: inningsCount }).map((_, idx) => (
-                                            <th key={idx} style={{ 
+                            <div 
+                                ref={topScrollRef}
+                                onScroll={handleTopScroll}
+                                style={{ 
+                                    height: `${topPanelHeight}px`, 
+                                    overflowX: 'auto', 
+                                    overflowY: 'auto', 
+                                    border: '1px solid var(--border)', 
+                                    borderRadius: '10px 10px 0 0', 
+                                    background: 'var(--bg)',
+                                    flexShrink: 0
+                                }}
+                            >
+                                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: `${150 + inningsCount * 180}px` }}>
+                                    <thead>
+                                        <tr style={{ background: 'var(--code-bg)', borderBottom: '2px solid var(--border)', position: 'sticky', top: 0, zIndex: 10 }}>
+                                            <th style={{ 
                                                 padding: '6px 10px', 
                                                 color: 'var(--text-h)', 
                                                 fontWeight: 'bold', 
-                                                textAlign: 'center', 
-                                                minWidth: '180px', 
+                                                width: '150px', 
+                                                minWidth: '150px',
+                                                borderRight: '1px solid var(--border)', 
                                                 background: 'var(--code-bg)',
                                                 position: 'sticky',
                                                 top: 0,
-                                                zIndex: 10,
+                                                left: 0,
+                                                zIndex: 20,
                                                 fontSize: '11px'
-                                            }}>
-                                                {idx + 1 === 1 ? '1ST' : idx + 1 === 2 ? '2ND' : idx + 1 === 3 ? '3RD' : `${idx + 1}TH`} INNING
-                                            </th>
+                                            }}>POSITION</th>
+                                            {Array.from({ length: inningsCount }).map((_, idx) => (
+                                                <th key={idx} style={{ 
+                                                    padding: '6px 10px', 
+                                                    color: 'var(--text-h)', 
+                                                    fontWeight: 'bold', 
+                                                    textAlign: 'center', 
+                                                    minWidth: '180px', 
+                                                    background: 'var(--code-bg)',
+                                                    position: 'sticky',
+                                                    top: 0,
+                                                    zIndex: 10,
+                                                    fontSize: '11px'
+                                                }}>
+                                                    {idx + 1 === 1 ? '1ST' : idx + 1 === 2 ? '2ND' : idx + 1 === 3 ? '3RD' : `${idx + 1}TH`} INNING
+                                                </th>
+                                            ))}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {/* Field Position Rows */}
+                                        {FIELD_POSITIONS.map(pos => (
+                                            <tr key={pos.key} style={{ borderBottom: '1px solid var(--border)' }}>
+                                                <td style={{ 
+                                                    padding: '6px 10px', 
+                                                    fontWeight: 'bold', 
+                                                    color: 'var(--text-h)', 
+                                                    background: 'var(--code-bg)', 
+                                                    borderRight: '1px solid var(--border)',
+                                                    position: 'sticky',
+                                                    left: 0,
+                                                    zIndex: 5,
+                                                    width: '150px',
+                                                    minWidth: '150px',
+                                                    fontSize: '11px'
+                                                }}>
+                                                    {pos.label}
+                                                </td>
+                                                {Array.from({ length: inningsCount }).map((_, inningIdx) => {
+                                                    const assignedPlayerId = assignments[inningIdx]?.[pos.key] || null;
+                                                    const assignedPlayer = getPlayerById(assignedPlayerId);
+                                                    const draggedPlayer = getPlayerById(draggedPlayerId);
+                                                    const isEligible = draggedPlayer ? isPlayerEligible(draggedPlayer, pos.key) : false;
+
+                                                    let cellBorderColor = assignedPlayer ? 'var(--accent)' : 'var(--border)';
+                                                    let cellBackground = assignedPlayer ? 'var(--accent-bg)' : 'transparent';
+                                                    if (draggedPlayer) {
+                                                        cellBorderColor = isEligible ? '#10b981' : '#ef4444';
+                                                        cellBackground = isEligible ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)';
+                                                    }
+                                                    return (
+                                                        <td 
+                                                            key={inningIdx} 
+                                                            style={{ padding: '3px 6px', verticalAlign: 'middle' }}
+                                                            onDragOver={(e) => e.preventDefault()}
+                                                            onDrop={(e) => {
+                                                                try {
+                                                                    const raw = e.dataTransfer.getData("text/plain");
+                                                                    const data = JSON.parse(raw);
+                                                                    handleDrop(data.playerId, inningIdx, pos.key, data.sourceInning, data.sourceKey);
+                                                                } catch (err) {
+                                                                    console.error(err);
+                                                                }
+                                                            }}
+                                                        >
+                                                            <div style={{
+                                                                minHeight: '26px',
+                                                                borderRadius: '6px',
+                                                                border: '1px dashed',
+                                                                borderColor: cellBorderColor,
+                                                                background: cellBackground,
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                padding: '2px',
+                                                                position: 'relative',
+                                                                transition: 'all 0.15s'
+                                                            }}>
+                                                                {assignedPlayer ? (
+                                                                    <div 
+                                                                        draggable
+                                                                        onDragStart={(e) => handleDragStart(e, assignedPlayer.id, inningIdx, pos.key)}
+                                                                        onDragEnd={() => setDraggedPlayerId(null)}
+                                                                        style={{
+                                                                            width: '100%',
+                                                                            padding: '3px 6px',
+                                                                            background: 'var(--bg)',
+                                                                            border: '1px solid var(--accent)',
+                                                                            borderRadius: '4px',
+                                                                            fontSize: '11px',
+                                                                            color: 'var(--accent)',
+                                                                            fontWeight: 'bold',
+                                                                            textAlign: 'center',
+                                                                            cursor: 'grab',
+                                                                            boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                                                                            whiteSpace: 'nowrap',
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            justifyContent: 'center',
+                                                                            gap: '4px'
+                                                                        }}
+                                                                    >
+                                                                        <span>{assignedPlayer.player_name} #{assignedPlayer.player_number}</span>
+                                                                        <button 
+                                                                            type="button" 
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleRemoveAssignment(inningIdx, pos.key);
+                                                                            }}
+                                                                            style={{
+                                                                                border: 'none',
+                                                                                background: 'transparent',
+                                                                                color: 'var(--text-d)',
+                                                                                cursor: 'pointer',
+                                                                                fontSize: '12px',
+                                                                                padding: '0 2px',
+                                                                                lineHeight: 1,
+                                                                                display: 'flex',
+                                                                                alignItems: 'center',
+                                                                                fontWeight: 'bold'
+                                                                            }}
+                                                                        >
+                                                                            ×
+                                                                        </button>
+                                                                    </div>
+                                                                ) : (
+                                                                    <span style={{ fontSize: '11px', color: 'var(--text-d)' }}>Drag here</span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    );
+                                                })}
+                                            </tr>
                                         ))}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {/* Field Position Rows */}
-                                    {FIELD_POSITIONS.map(pos => (
-                                        <tr key={pos.key} style={{ borderBottom: '1px solid var(--border)' }}>
+
+                                        {/* Bench Rows */}
+                                        {benchSlots.map((benchKey) => (
+                                            <tr key={benchKey} style={{ borderBottom: '1px solid var(--border)', background: 'rgba(0,0,0,0.02)' }}>
+                                                <td style={{ 
+                                                    padding: '6px 10px', 
+                                                    fontWeight: 'bold', 
+                                                    color: '#000000', 
+                                                    background: '#f1f5f9', 
+                                                    borderRight: '1px solid var(--border)',
+                                                    position: 'sticky',
+                                                    left: 0,
+                                                    zIndex: 5,
+                                                    width: '150px',
+                                                    minWidth: '150px',
+                                                    fontSize: '11px'
+                                                }}>
+                                                    BENCH
+                                                </td>
+                                                {Array.from({ length: inningsCount }).map((_, inningIdx) => {
+                                                    const assignedPlayerId = assignments[inningIdx]?.[benchKey] || null;
+                                                    const assignedPlayer = getPlayerById(assignedPlayerId);
+                                                    return (
+                                                        <td 
+                                                            key={inningIdx} 
+                                                            style={{ padding: '3px 6px', verticalAlign: 'middle' }}
+                                                            onDragOver={(e) => e.preventDefault()}
+                                                            onDrop={(e) => {
+                                                                try {
+                                                                    const raw = e.dataTransfer.getData("text/plain");
+                                                                    const data = JSON.parse(raw);
+                                                                    handleDrop(data.playerId, inningIdx, benchKey, data.sourceInning, data.sourceKey);
+                                                                } catch (err) {
+                                                                        console.error(err);
+                                                                }
+                                                            }}
+                                                        >
+                                                            <div style={{
+                                                                minHeight: '26px',
+                                                                borderRadius: '6px',
+                                                                border: '1px dashed var(--border)',
+                                                                display: 'flex',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                padding: '2px',
+                                                                position: 'relative'
+                                                            }}>
+                                                                {assignedPlayer ? (
+                                                                    <div 
+                                                                        draggable
+                                                                        onDragStart={(e) => handleDragStart(e, assignedPlayer.id, inningIdx, benchKey)}
+                                                                        onDragEnd={() => setDraggedPlayerId(null)}
+                                                                        style={{
+                                                                            width: '100%',
+                                                                            padding: '3px 6px',
+                                                                            background: '#f8fafc',
+                                                                            border: '1px solid #94a3b8',
+                                                                            borderRadius: '4px',
+                                                                            fontSize: '11px',
+                                                                            color: '#000000',
+                                                                            fontWeight: 'bold',
+                                                                            textAlign: 'center',
+                                                                            cursor: 'grab',
+                                                                            whiteSpace: 'nowrap',
+                                                                            display: 'flex',
+                                                                            alignItems: 'center',
+                                                                            justifyContent: 'center',
+                                                                            gap: '4px'
+                                                                        }}
+                                                                    >
+                                                                        <span>{assignedPlayer.player_name} #{assignedPlayer.player_number}</span>
+                                                                        <button 
+                                                                            type="button" 
+                                                                            onClick={(e) => {
+                                                                                e.stopPropagation();
+                                                                                handleRemoveAssignment(inningIdx, benchKey);
+                                                                            }}
+                                                                            style={{
+                                                                                border: 'none',
+                                                                                background: 'transparent',
+                                                                                color: '#000000',
+                                                                                cursor: 'pointer',
+                                                                                fontSize: '12px',
+                                                                                padding: '0 2px',
+                                                                                lineHeight: 1,
+                                                                                display: 'flex',
+                                                                                alignItems: 'center',
+                                                                                fontWeight: 'bold'
+                                                                            }}
+                                                                        >
+                                                                            ×
+                                                                        </button>
+                                                                    </div>
+                                                                ) : (
+                                                                    <span style={{ fontSize: '11px', color: 'var(--text-d)' }}>Drag here</span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                    );
+                                                })}
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Resizable Divider Handle */}
+                            <div 
+                                onMouseDown={handleMouseDown}
+                                style={{
+                                    height: '8px',
+                                    background: 'var(--border)',
+                                    cursor: 'row-resize',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    userSelect: 'none',
+                                    position: 'relative',
+                                    zIndex: 30,
+                                    transition: 'background 0.2s',
+                                    flexShrink: 0
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--accent)' }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--border)' }}
+                            >
+                                {/* Textured Grip Bars */}
+                                <div style={{ 
+                                    width: '32px', 
+                                    height: '4px', 
+                                    borderRadius: '2px', 
+                                    borderTop: '1px solid rgba(255,255,255,0.2)',
+                                    borderBottom: '1px solid rgba(0,0,0,0.2)',
+                                    background: 'rgba(0,0,0,0.1)' 
+                                }} />
+                            </div>
+
+                            {/* Bottom Pane: Unassigned Pool */}
+                            <div 
+                                ref={bottomScrollRef}
+                                onScroll={handleBottomScroll}
+                                style={{ 
+                                    flex: 1, 
+                                    overflowX: 'auto', 
+                                    overflowY: 'auto', 
+                                    border: '1px solid var(--border)', 
+                                    borderRadius: '0 0 10px 10px', 
+                                    background: 'var(--bg)' 
+                                }}
+                            >
+                                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: `${150 + inningsCount * 180}px` }}>
+                                    <tbody>
+                                        <tr style={{ background: 'var(--code-bg)' }}>
                                             <td style={{ 
-                                                padding: '6px 10px', 
+                                                padding: '8px 12px', 
                                                 fontWeight: 'bold', 
                                                 color: 'var(--text-h)', 
-                                                background: 'var(--code-bg)', 
-                                                borderRight: '1px solid var(--border)',
+                                                borderRight: '1px solid var(--border)', 
                                                 position: 'sticky',
                                                 left: 0,
-                                                zIndex: 5,
+                                                width: '150px',
+                                                minWidth: '150px',
+                                                background: 'var(--code-bg)',
+                                                zIndex: 20,
                                                 fontSize: '11px'
                                             }}>
-                                                {pos.label}
+                                                UNASSIGNED POOL
                                             </td>
                                             {Array.from({ length: inningsCount }).map((_, inningIdx) => {
-                                                const assignedPlayerId = assignments[inningIdx]?.[pos.key] || null;
-                                                const assignedPlayer = getPlayerById(assignedPlayerId);
-                                                const draggedPlayer = getPlayerById(draggedPlayerId);
-                                                const isEligible = draggedPlayer ? isPlayerEligible(draggedPlayer, pos.key) : false;
-
-                                                let cellBorderColor = assignedPlayer ? 'var(--accent)' : 'var(--border)';
-                                                let cellBackground = assignedPlayer ? 'var(--accent-bg)' : 'transparent';
-                                                if (draggedPlayer) {
-                                                    cellBorderColor = isEligible ? '#10b981' : '#ef4444';
-                                                    cellBackground = isEligible ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)';
-                                                }
+                                                const unassigned = getUnassignedPlayers(inningIdx);
                                                 return (
                                                     <td 
                                                         key={inningIdx} 
-                                                        style={{ padding: '3px 6px', verticalAlign: 'middle' }}
+                                                        style={{ 
+                                                            padding: '4px 6px', 
+                                                            verticalAlign: 'top', 
+                                                            minWidth: '180px'
+                                                        }}
                                                         onDragOver={(e) => e.preventDefault()}
                                                         onDrop={(e) => {
                                                             try {
                                                                 const raw = e.dataTransfer.getData("text/plain");
                                                                 const data = JSON.parse(raw);
-                                                                handleDrop(data.playerId, inningIdx, pos.key, data.sourceInning, data.sourceKey);
+                                                                // If dragged from a grid cell in this inning, return it to the unassigned pool
+                                                                if (data.sourceInning === inningIdx && data.sourceKey) {
+                                                                    handleRemoveAssignment(inningIdx, data.sourceKey);
+                                                                }
                                                             } catch (err) {
                                                                 console.error(err);
                                                             }
                                                         }}
                                                     >
-                                                        <div style={{
-                                                            minHeight: '26px',
-                                                            borderRadius: '6px',
-                                                            border: '1px dashed',
-                                                            borderColor: cellBorderColor,
-                                                            background: cellBackground,
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'center',
-                                                            padding: '2px',
-                                                            position: 'relative',
-                                                            transition: 'all 0.15s'
-                                                        }}>
-                                                            {assignedPlayer ? (
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minHeight: '30px', alignItems: 'stretch' }}>
+                                                            {unassigned.map(p => (
                                                                 <div 
+                                                                    key={p.id}
                                                                     draggable
-                                                                    onDragStart={(e) => handleDragStart(e, assignedPlayer.id, inningIdx, pos.key)}
+                                                                    onDragStart={(e) => handleDragStart(e, p.id, inningIdx, null)}
                                                                     onDragEnd={() => setDraggedPlayerId(null)}
                                                                     style={{
-                                                                        width: '100%',
                                                                         padding: '3px 6px',
-                                                                        background: 'var(--bg)',
+                                                                        background: 'var(--accent-bg)',
                                                                         border: '1px solid var(--accent)',
                                                                         borderRadius: '4px',
                                                                         fontSize: '11px',
@@ -424,230 +745,27 @@ export default function LineupCreatorModal({ teamId, teamName, inningsPerGame, o
                                                                         fontWeight: 'bold',
                                                                         textAlign: 'center',
                                                                         cursor: 'grab',
-                                                                        boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+                                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                                                        transition: 'all 0.15s',
                                                                         whiteSpace: 'nowrap',
-                                                                        display: 'flex',
-                                                                        alignItems: 'center',
-                                                                        justifyContent: 'center',
-                                                                        gap: '4px'
-                                                                    }}
-                                                                >
-                                                                    <span>{assignedPlayer.player_name} #{assignedPlayer.player_number}</span>
-                                                                    <button 
-                                                                        type="button" 
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            handleRemoveAssignment(inningIdx, pos.key);
-                                                                        }}
-                                                                        style={{
-                                                                            border: 'none',
-                                                                            background: 'transparent',
-                                                                            color: 'var(--text-d)',
-                                                                            cursor: 'pointer',
-                                                                            fontSize: '12px',
-                                                                            padding: '0 2px',
-                                                                            lineHeight: 1,
-                                                                            display: 'flex',
-                                                                            alignItems: 'center',
-                                                                            fontWeight: 'bold'
-                                                                        }}
-                                                                    >
-                                                                        ×
-                                                                    </button>
-                                                                </div>
-                                                            ) : (
-                                                                <span style={{ fontSize: '11px', color: 'var(--text-d)' }}>Drag here</span>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                );
-                                            })}
-                                        </tr>
-                                    ))}
-
-                                    {/* Bench Rows */}
-                                    {benchSlots.map((benchKey) => (
-                                        <tr key={benchKey} style={{ borderBottom: '1px solid var(--border)', background: 'rgba(0,0,0,0.02)' }}>
-                                            <td style={{ 
-                                                padding: '6px 10px', 
-                                                fontWeight: 'bold', 
-                                                color: '#000000', 
-                                                background: '#f1f5f9', 
-                                                borderRight: '1px solid var(--border)',
-                                                position: 'sticky',
-                                                left: 0,
-                                                zIndex: 5,
-                                                fontSize: '11px'
-                                            }}>
-                                                BENCH
-                                            </td>
-                                            {Array.from({ length: inningsCount }).map((_, inningIdx) => {
-                                                const assignedPlayerId = assignments[inningIdx]?.[benchKey] || null;
-                                                const assignedPlayer = getPlayerById(assignedPlayerId);
-                                                return (
-                                                    <td 
-                                                        key={inningIdx} 
-                                                        style={{ padding: '3px 6px', verticalAlign: 'middle' }}
-                                                        onDragOver={(e) => e.preventDefault()}
-                                                        onDrop={(e) => {
-                                                            try {
-                                                                const raw = e.dataTransfer.getData("text/plain");
-                                                                const data = JSON.parse(raw);
-                                                                handleDrop(data.playerId, inningIdx, benchKey, data.sourceInning, data.sourceKey);
-                                                            } catch (err) {
-                                                                    console.error(err);
-                                                            }
-                                                        }}
-                                                     >
-                                                        <div style={{
-                                                            minHeight: '26px',
-                                                            borderRadius: '6px',
-                                                            border: '1px dashed var(--border)',
-                                                            display: 'flex',
-                                                            alignItems: 'center',
-                                                            justifyContent: 'center',
-                                                            padding: '2px',
-                                                            position: 'relative'
-                                                        }}>
-                                                            {assignedPlayer ? (
-                                                                <div 
-                                                                    draggable
-                                                                    onDragStart={(e) => handleDragStart(e, assignedPlayer.id, inningIdx, benchKey)}
-                                                                    onDragEnd={() => setDraggedPlayerId(null)}
-                                                                    style={{
                                                                         width: '100%',
-                                                                        padding: '3px 6px',
-                                                                        background: '#f8fafc',
-                                                                        border: '1px solid #94a3b8',
-                                                                        borderRadius: '4px',
-                                                                        fontSize: '11px',
-                                                                        color: '#000000',
-                                                                        fontWeight: 'bold',
-                                                                        textAlign: 'center',
-                                                                        cursor: 'grab',
-                                                                        whiteSpace: 'nowrap',
-                                                                        display: 'flex',
-                                                                        alignItems: 'center',
-                                                                        justifyContent: 'center',
-                                                                        gap: '4px'
+                                                                        boxSizing: 'border-box'
                                                                     }}
                                                                 >
-                                                                    <span>{assignedPlayer.player_name} #{assignedPlayer.player_number}</span>
-                                                                    <button 
-                                                                        type="button" 
-                                                                        onClick={(e) => {
-                                                                            e.stopPropagation();
-                                                                            handleRemoveAssignment(inningIdx, benchKey);
-                                                                        }}
-                                                                        style={{
-                                                                            border: 'none',
-                                                                            background: 'transparent',
-                                                                            color: '#000000',
-                                                                            cursor: 'pointer',
-                                                                            fontSize: '12px',
-                                                                            padding: '0 2px',
-                                                                            lineHeight: 1,
-                                                                            display: 'flex',
-                                                                            alignItems: 'center',
-                                                                            fontWeight: 'bold'
-                                                                        }}
-                                                                    >
-                                                                        ×
-                                                                    </button>
+                                                                    {p.player_name} #{p.player_number}
                                                                 </div>
-                                                            ) : (
-                                                                <span style={{ fontSize: '11px', color: 'var(--text-d)' }}>Drag here</span>
+                                                            ))}
+                                                            {unassigned.length === 0 && (
+                                                                <div style={{ fontSize: '11px', color: 'var(--accent)', textAlign: 'center', padding: '4px 0' }}>All placed! 🎉</div>
                                                             )}
                                                         </div>
                                                     </td>
                                                 );
                                             })}
                                         </tr>
-                                    ))}
-                                    
-                                    {/* Unassigned Players Pool Row (Sticky at the bottom of the table) */}
-                                    <tr style={{ background: 'var(--code-bg)' }}>
-                                        <td style={{ 
-                                            padding: '8px 12px', 
-                                            fontWeight: 'bold', 
-                                            color: 'var(--text-h)', 
-                                            borderRight: '1px solid var(--border)', 
-                                            borderTop: '2px solid var(--border)',
-                                            position: 'sticky',
-                                            bottom: 0,
-                                            left: 0,
-                                            background: 'var(--code-bg)',
-                                            zIndex: 20,
-                                            fontSize: '11px'
-                                        }}>
-                                            UNASSIGNED POOL
-                                        </td>
-                                        {Array.from({ length: inningsCount }).map((_, inningIdx) => {
-                                            const unassigned = getUnassignedPlayers(inningIdx);
-                                            return (
-                                                <td 
-                                                    key={inningIdx} 
-                                                    style={{ 
-                                                        padding: '4px 6px', 
-                                                        verticalAlign: 'top', 
-                                                        borderTop: '2px solid var(--border)',
-                                                        position: 'sticky',
-                                                        bottom: 0,
-                                                        background: 'var(--code-bg)',
-                                                        zIndex: 10
-                                                    }}
-                                                    onDragOver={(e) => e.preventDefault()}
-                                                    onDrop={(e) => {
-                                                        try {
-                                                            const raw = e.dataTransfer.getData("text/plain");
-                                                            const data = JSON.parse(raw);
-                                                            // If dragged from grid cell, return to unassigned pool
-                                                            if (data.sourceInning === inningIdx && data.sourceKey) {
-                                                                handleRemoveAssignment(inningIdx, data.sourceKey);
-                                                            }
-                                                        } catch (err) {
-                                                            console.error(err);
-                                                        }
-                                                    }}
-                                                >
-                                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minHeight: '30px', alignItems: 'stretch' }}>
-                                                        {unassigned.map(p => (
-                                                            <div 
-                                                                key={p.id}
-                                                                draggable
-                                                                onDragStart={(e) => handleDragStart(e, p.id, inningIdx, null)}
-                                                                onDragEnd={() => setDraggedPlayerId(null)}
-                                                                style={{
-                                                                    padding: '3px 6px',
-                                                                    background: 'var(--accent-bg)',
-                                                                    border: '1px solid var(--accent)',
-                                                                    borderRadius: '4px',
-                                                                    fontSize: '11px',
-                                                                    color: 'var(--accent)',
-                                                                    fontWeight: 'bold',
-                                                                    textAlign: 'center',
-                                                                    cursor: 'grab',
-                                                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                                                                    transition: 'all 0.15s',
-                                                                    whiteSpace: 'nowrap',
-                                                                    width: '100%',
-                                                                    boxSizing: 'border-box'
-                                                                }}
-                                                            >
-                                                                {p.player_name} #{p.player_number}
-                                                            </div>
-                                                        ))}
-                                                        {unassigned.length === 0 && (
-                                                            <div style={{ fontSize: '11px', color: 'var(--accent)', textAlign: 'center', padding: '4px 0' }}>All placed! 🎉</div>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                            );
-                                        })}
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
+                                    </tbody>
+                                </table>
+                            </div>
 
                         {/* Modal Footer Controls */}
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '10px' }}>
@@ -696,4 +814,3 @@ export default function LineupCreatorModal({ teamId, teamName, inningsPerGame, o
         </div>
     );
 }
-
