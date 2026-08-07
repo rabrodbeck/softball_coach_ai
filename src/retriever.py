@@ -128,47 +128,62 @@ def build_agent_executor(coach_id: int, selected_team_id: int | None = None):
             return f"Error listing teams: {str(e)}"
 
     @tool
-    def get_team_roster(team_id: int) -> str:
-        """Retrieves the complete roster of players and their full stats (Batting, Pitching, Fielding, and Catching) for a specific team.
+    def get_team_roster(team_id: int, scope: str = "season", category: str = "all") -> str:
+        """Retrieves the roster of players and their stats (Batting, Pitching, Fielding, and Catching) for a specific team.
         You must specify the team_id.
+        
+        Parameters:
+        - scope: defaults to 'season' (active team stats) but can be set to 'career' to retrieve career statistics across all teams.
+        - category: defaults to 'all' but can be set to 'batting', 'pitching', 'fielding', or 'catching' to return only that specific category of statistics. Use this to reduce noise when answering specific questions.
         """
         try:
             my_teams = get_coach_teams(coach_id)
             matching_team = next((t for t in my_teams if t["id"] == team_id), None)
             if not matching_team:
-                return f"Error: You do not have permission to view stats for Team ID {team_id}."
+                return f"Error: You do not have permission to view stats for Team ID {team_id}"
             
             # Read active role from query
             coach_role = matching_team.get("role", "Head Coach")
             team_name = matching_team["team_name"]
-            players = get_team_players(team_id)
+            
+            if scope == "career":
+                from src.db.players import get_team_players_career
+                players = get_team_players_career(team_id)
+            else:
+                players = get_team_players(team_id)
+        
             if not players:
                 return f"The team '{team_name}' has no players in the roster."
                 
             output = [
-                f"Roster and Statistics for '{team_name}' (Your Role: {coach_role}):",
+                f"Roster and Statistics for '{team_name}' (Your Role: {coach_role}, Scope: {scope}, Category: {category}):",
                 "NOTE: If your role is 'Assistant Coach', you have read-only access. You cannot perform operations like adding, editing, or deleting players.",
                 "---"
             ]
             for p in players:
-                # Format batting stats
-                batting = (
-                    f"Batting: GP={p.get('games_played', 0)}, PA={p.get('plate_appearances', 0)}, "
-                    f"AB={p.get('at_bats', 0)}, H={p.get('hits', 0)}, AVG={p.get('batting_average', 0.0):.3f}, "
-                    f"OBP={p.get('on_base_percentage', 0.0):.3f}, SLG={p.get('slugging_percentage', 0.0):.3f}, "
-                    f"OPS={p.get('ops', 0.0):.3f}, ISO={p.get('isolated_power', 0.0):.3f}, "
-                    f"BBK_Ratio={p.get('bb_k_ratio', 0.0):.2f}, SB_PCT={p.get('stolen_base_percentage', 0.0):.3f}, "
-                    f"HR={p.get('home_runs', 0)}, RBI={p.get('runs_batted_in', 0)}, "
-                    f"R={p.get('runs_scored', 0)}, BB={p.get('walks', 0)}, SO={p.get('strikeouts', 0)}, "
-                    f"HBP={p.get('hit_by_pitches', 0)}, ROE={p.get('reached_on_error', 0)}, SB={p.get('stolen_bases', 0)}, CS={p.get('caught_stealing', 0)}, "
-                    f"1B={p.get('singles', 0)}, 2B={p.get('doubles', 0)}, 3B={p.get('triples', 0)}"
-                )
+                parts = []
                 
-                # Format pitching stats (only if they have pitching appearances)
-                pitching = ""
-                if p.get("games_pitched", 0) > 0 and p.get("number_of_pitches", 0) > 0:
+                # 1. Batting stats (omit if all stats are zero)
+                has_batting = p.get("games_played", 0) > 0 or p.get("plate_appearances", 0) > 0
+                if has_batting and category in ("all", "batting"):
+                    batting = (
+                        f"Batting: GP={p.get('games_played', 0)}, PA={p.get('plate_appearances', 0)}, "
+                        f"AB={p.get('at_bats', 0)}, H={p.get('hits', 0)}, AVG={p.get('batting_average', 0.0):.3f}, "
+                        f"OBP={p.get('on_base_percentage', 0.0):.3f}, SLG={p.get('slugging_percentage', 0.0):.3f}, "
+                        f"OPS={p.get('ops', 0.0):.3f}, ISO={p.get('isolated_power', 0.0):.3f}, "
+                        f"BBK_Ratio={p.get('bb_k_ratio', 0.0):.2f}, SB_PCT={p.get('stolen_base_percentage', 0.0):.3f}, "
+                        f"HR={p.get('home_runs', 0)}, RBI={p.get('runs_batted_in', 0)}, "
+                        f"R={p.get('runs_scored', 0)}, BB={p.get('walks', 0)}, SO={p.get('strikeouts', 0)}, "
+                        f"HBP={p.get('hit_by_pitches', 0)}, ROE={p.get('reached_on_error', 0)}, SB={p.get('stolen_bases', 0)}, CS={p.get('caught_stealing', 0)}, "
+                        f"1B={p.get('singles', 0)}, 2B={p.get('doubles', 0)}, 3B={p.get('triples', 0)}"
+                    )
+                    parts.append(batting)
+                
+                # 2. Pitching stats (omit if all stats are zero)
+                has_pitching = p.get("games_pitched", 0) > 0 and p.get("number_of_pitches", 0) > 0
+                if has_pitching and category in ("all", "pitching"):
                     pitching = (
-                        f" | Pitching: GamesPitched={p.get('games_pitched', 0)}, GamesStarted={p.get('games_started', 0)}, "
+                        f"Pitching: GamesPitched={p.get('games_pitched', 0)}, GamesStarted={p.get('games_started', 0)}, "
                         f"InningsPitched={p.get('innings_pitched', 0.0):.1f}, BattersFaced={p.get('batters_faced', 0)}, "
                         f"Pitches={p.get('number_of_pitches', 0)}, HitsAllowed={p.get('hits_allowed', 0)}, "
                         f"RunsAllowed={p.get('runs_allowed', 0)}, EarnedRuns={p.get('earned_runs', 0)}, "
@@ -178,36 +193,44 @@ def build_agent_executor(coach_id: int, selected_team_id: int | None = None):
                         f"K7={p.get('k7', 0.0):.2f}, BB7={p.get('bb7', 0.0):.2f}, "
                         f"PitchesPerInning={p.get('pitches_per_inning', 0.0):.1f}, KtoBBRatio={p.get('k_bb_ratio', 0.0):.2f}"
                     )
+                    parts.append(pitching)
                 
-                # Format fielding stats
-                fielding = (
-                    f" | Fielding: TC={p.get('total_chances', 0)}, PO={p.get('putouts', 0)}, "
-                    f"A={p.get('assists', 0)}, E={p.get('errors', 0)}, FPCT={p.get('fielding_percentage', 0.0):.3f}"
-                )
+                # 3. Fielding stats (omit if all stats are zero)
+                has_fielding = p.get("total_chances", 0) > 0
+                if has_fielding and category in ("all", "fielding"):
+                    fielding = (
+                        f"Fielding: TC={p.get('total_chances', 0)}, PO={p.get('putouts', 0)}, "
+                        f"A={p.get('assists', 0)}, E={p.get('errors', 0)}, FPCT={p.get('fielding_percentage', 0.0):.3f}"
+                    )
+                    parts.append(fielding)
                 
-                # Format catching stats (only if they have caught innings)
-                catching = ""
-                if p.get("innings_caught", 0.0) > 0:
+                # 4. Catching stats (omit if all stats are zero)
+                has_catching = p.get("innings_caught", 0.0) > 0
+                if has_catching and category in ("all", "catching"):
                     catching = (
-                        f" | Catching: InningsCaught={p.get('innings_caught', 0.0):.1f}, PB={p.get('passed_balls_allowed', 0)}, "
+                        f"Catching: InningsCaught={p.get('innings_caught', 0.0):.1f}, PB={p.get('passed_balls_allowed', 0)}, "
                         f"SBA={p.get('runners_stolen_bases', 0)}, CS={p.get('runners_caught_stealing', 0)}, "
                         f"CS_PCT={p.get('caught_stealing_percentage', 0.0):.3f}"
                     )
+                    parts.append(catching)
                 
-                # Format position innings stats (NEW)
-                pos_list = []
-                for pos_name, key in [("P", "innings_p"), ("C", "innings_c"), ("1B", "innings_1b"), ("2B", "innings_2b"), ("3B", "innings_3b"), ("SS", "innings_ss"), ("LF", "innings_lf"), ("CF", "innings_cf"), ("RF", "innings_rf")]:
-                    val = p.get(key, 0.0)
-                    if val > 0:
-                        pos_list.append(f"{pos_name}={val:.1f}")
-                pos_innings = ""
-                if pos_list:
-                    pos_innings = f" | PositionInnings: {', '.join(pos_list)}"
+                # 5. Position innings (only if category is all)
+                if category == "all":
+                    pos_list = []
+                    for pos_name, key in [("P", "innings_p"), ("C", "innings_c"), ("1B", "innings_1b"), ("2B", "innings_2b"), ("3B", "innings_3b"), ("SS", "innings_ss"), ("LF", "innings_lf"), ("CF", "innings_cf"), ("RF", "innings_rf")]:
+                        val = p.get(key, 0.0)
+                        if val > 0:
+                            pos_list.append(f"{pos_name}={val:.1f}")
+                    if pos_list:
+                        parts.append(f"PositionInnings: {', '.join(pos_list)}")
                 
+                stats_str = " | ".join(parts) if parts else "No stats recorded yet"
                 eligible_pos = p.get('eligible_positions') or 'P,C,1B,2B,3B,SS,LF,CF,RF'
-                eligible_str = f" | EligiblePositions: {eligible_pos}"
                 
-                output.append(f"- **{p['player_name']}** (Jersey #{p['player_number']}, Bats: {p.get('batting_hand', 'Right')}, Throws: {p.get('throwing_hand', 'Right')}) - {batting}{pitching}{fielding}{catching}{pos_innings}{eligible_str}")
+                output.append(
+                    f"- **{p['player_name']}** (Jersey #{p['player_number']}, Bats: {p.get('batting_hand', 'Right')}, Throws: {p.get('throwing_hand', 'Right')}) - "
+                    f"{stats_str} | EligiblePositions: {eligible_pos}"
+                )
             return "\n".join(output)
         except Exception as e:
             return f"Error fetching team roster: {str(e)}"
