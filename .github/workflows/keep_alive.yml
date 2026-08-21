@@ -1,0 +1,16 @@
+name: Keep Hugging Face Space Alive
+
+on:
+  schedule:
+    # Runs at minute 0 and 30 of every hour (every 30 minutes)
+    - cron: '0,30 * * * *'
+  # Allows you to manually trigger the workflow from the GitHub UI for testing
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping API Health Check
+        run: |
+          curl -f -s https://rbrodbeck-softball-coach-ai.hf.space/ || exit 1
