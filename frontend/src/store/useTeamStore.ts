@@ -84,7 +84,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
           const currentSelected = data.find((t: Team) => t.id === selectedTeamId);
           if (currentSelected) {
             onSelectTeam(currentSelected);
-            set({ userRole: currentSelected.role || null });
+            set({ selectedTeamId: currentSelected.id, userRole: currentSelected.role || null });
           }
         } else {
           const defaultActive = data.find((t: Team) => t.is_active);
@@ -263,7 +263,7 @@ export const useTeamStore = create<TeamState>((set, get) => ({
   updatePlayer: async (coachId, playerId, playerData) => {
     set({ isLoading: true, error: null });
     try {
-      const teamId = get().selectedTeamId;
+      const teamId = playerData.team_id || get().selectedTeamId;
       const response = await apiFetch(`/api/players/${playerId}`, {
         method: "PUT",
         body: JSON.stringify({

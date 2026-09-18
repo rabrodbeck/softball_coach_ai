@@ -232,6 +232,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
         e.preventDefault();
         if (!editingPlayer) return;
         await updatePlayer(coachId, editingPlayer.id, {
+            team_id: selectedTeamId || editingPlayer.team_id,
             player_name: playerName,
             player_number: playerNumber,
             batting_hand: battingHand,
