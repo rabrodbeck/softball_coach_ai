@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Trash2 } from 'lucide-react';
 import type { Player } from '../types';
 import { useRosterSortFilter } from '../hooks/useRosterSortFilter';
@@ -21,6 +22,13 @@ export function RosterTableContainer({
   onEditPlayer,
   onDeletePlayer,
 }: RosterTableContainerProps) {
+  const activePlayers = useMemo(() => {
+    if (subView === 'pitching') {
+      return players.filter((p) => (p.number_of_pitches || 0) >= 1);
+    }
+    return players;
+  }, [players, subView]);
+
   const {
     searchQuery,
     setSearchQuery,
@@ -28,7 +36,7 @@ export function RosterTableContainer({
     sortDirection,
     handleSort,
     sortedPlayers,
-  } = useRosterSortFilter(players);
+  } = useRosterSortFilter(activePlayers);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -200,31 +208,49 @@ export function RosterTableContainer({
             </tr>
           </thead>
           <tbody>
-            {sortedPlayers.map((p) => (
-              <tr key={p.id} style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer' }} onClick={() => onEditPlayer(p)}>
-                <td style={{ padding: '10px 12px', fontWeight: 'bold' }}>#{p.player_number}</td>
-                <td style={{ padding: '10px 12px', color: 'var(--text-h)', fontWeight: '600' }}>{p.player_name}</td>
-                <td style={{ padding: '10px 12px' }}>{p.batting_hand}</td>
-                <td style={{ padding: '10px 12px' }}>{p.throwing_hand}</td>
-                
-                {subView === 'batting' && <RosterBattingTable players={[p]} />}
-                {subView === 'pitching' && <RosterPitchingTable players={[p]} />}
-                {subView === 'fielding' && <RosterFieldingTable players={[p]} />}
-                {subView === 'catching' && <RosterCatchingTable players={[p]} />}
-
-                {userRole === 'Head Coach' && (
-                  <td style={{ padding: '10px 12px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
-                    <button 
-                      onClick={() => onDeletePlayer(p.id)} 
-                      className="btn-delete-team" 
-                      style={{ display: 'inline-flex', padding: '6px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </td>
-                )}
+            {sortedPlayers.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={50}
+                  style={{
+                    textAlign: 'center',
+                    padding: '32px 16px',
+                    color: 'var(--text-secondary)',
+                    fontStyle: 'italic',
+                  }}
+                >
+                  {subView === 'pitching'
+                    ? 'No players with pitches recorded yet.'
+                    : 'No players found.'}
+                </td>
               </tr>
-            ))}
+            ) : (
+              sortedPlayers.map((p) => (
+                <tr key={p.id} style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer' }} onClick={() => onEditPlayer(p)}>
+                  <td style={{ padding: '10px 12px', fontWeight: 'bold' }}>#{p.player_number}</td>
+                  <td style={{ padding: '10px 12px', color: 'var(--text-h)', fontWeight: '600' }}>{p.player_name}</td>
+                  <td style={{ padding: '10px 12px' }}>{p.batting_hand}</td>
+                  <td style={{ padding: '10px 12px' }}>{p.throwing_hand}</td>
+                  
+                  {subView === 'batting' && <RosterBattingTable players={[p]} />}
+                  {subView === 'pitching' && <RosterPitchingTable players={[p]} />}
+                  {subView === 'fielding' && <RosterFieldingTable players={[p]} />}
+                  {subView === 'catching' && <RosterCatchingTable players={[p]} />}
+
+                  {userRole === 'Head Coach' && (
+                    <td style={{ padding: '10px 12px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                      <button 
+                        onClick={() => onDeletePlayer(p.id)} 
+                        className="btn-delete-team" 
+                        style={{ display: 'inline-flex', padding: '6px', background: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
