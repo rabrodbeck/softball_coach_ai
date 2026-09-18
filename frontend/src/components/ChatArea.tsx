@@ -138,8 +138,15 @@ export default function ChatArea({ userProfile, selectedTeamId }: ChatAreaProps)
                                             if (content.startsWith("🔍 Running tool:")) {
                                                 content = "";
                                             }
-                                            const sources = lastMsg.sources ? [...lastMsg.sources] : [];
-                                            if (parsed.tool === "search_playbook" && !sources.includes("softball_playbook")) {
+                                            let sources = lastMsg.sources ? [...lastMsg.sources] : [];
+                                            if (parsed.sources && Array.isArray(parsed.sources) && parsed.sources.length > 0) {
+                                                sources = sources.filter((s) => s !== "softball_playbook");
+                                                for (const s of parsed.sources) {
+                                                    if (!sources.includes(s)) {
+                                                        sources.push(s);
+                                                    }
+                                                }
+                                            } else if (parsed.tool === "search_playbook" && sources.length === 0) {
                                                 sources.push("softball_playbook");
                                             }
                                             return [

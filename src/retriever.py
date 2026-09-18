@@ -94,7 +94,35 @@ def build_chain():
         verbose=False
     )
 
-def build_agent_executor(coach_id: int, selected_team_id: int | None = None):
+def format_source_name(source: str) -> str:
+    """Formats raw file paths or names into clean, readable document and drill titles."""
+    if not source:
+        return "softball_playbook"
+    filename = os.path.basename(source.replace("\\", "/"))
+    
+    # Softball Spot drill PDFs, e.g. pitching_flamingo_drill_softball_spot.pdf
+    if "_softball_spot" in filename.lower():
+        clean = filename.replace(".pdf", "")
+        while "_softball_spot" in clean:
+            clean = clean.replace("_softball_spot", "")
+        parts = clean.split("_")
+        category = parts[0].capitalize()  # e.g. Pitching, Hitting, Fielding, Baserunning
+        drill_words = [p.capitalize() for p in parts[1:] if p.lower() != "drill"]
+        drill_title = " ".join(drill_words)
+        return f"{drill_title} Drill ({category})"
+    
+    # Practice plans
+    if filename.startswith("practice_plan_"):
+        div = filename.replace("practice_plan_", "").replace(".txt", "").upper()
+        return f"{div} Practice Plan"
+    
+    # YouTube video transcripts
+    if filename.startswith("yt_"):
+        return f"Coaching Video ({filename})"
+
+    return filename
+
+def build_agent_executor(coach_id: int, selected_team_id: int | None = None, sources_tracker: list | None = None):
     """Factory function that builds the OpenAI Tool Calling Agent with DB and Vector tools."""
     load_dotenv()
     api_key = os.environ.get("OPENAI_API_KEY")
@@ -279,7 +307,24 @@ def build_agent_executor(coach_id: int, selected_team_id: int | None = None):
                 seen.add(doc_id)
                 combined.append(doc)
                 
-        return "\n\n".join([doc.page_content for doc in combined])
+        # Record referenced document sources
+        if sources_tracker is not None:
+            for doc in combined:
+                raw_src = doc.metadata.get("source", "")
+                if raw_src:
+                    formatted = format_source_name(raw_src)
+                    if formatted not in sources_tracker:
+                        sources_tracker.append(formatted)
+
+        formatted_docs = []
+        for doc in combined:
+            raw_src = doc.metadata.get("source", "")
+            label = format_source_name(raw_src) if raw_src else "Playbook"
+            page = doc.metadata.get("page")
+            page_str = f" (Page {page + 1})" if page is not None and isinstance(page, int) else ""
+            formatted_docs.append(f"[{label}{page_str}]:\n{doc.page_content}")
+
+        return "\n\n".join(formatted_docs)
 
     tools = [list_my_teams, get_team_roster, search_playbook]
 

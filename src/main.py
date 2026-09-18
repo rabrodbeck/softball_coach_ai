@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, EmailStr, field_validator
-from src.retriever import build_chain, build_agent_executor
+from src.retriever import build_chain, build_agent_executor, format_source_name
 from src.database import get_coach_by_email, authenticate_coach, register_coach, create_team, get_coach_teams, set_active_team, update_team, add_player, get_team_players, update_player_stats, delete_player, bulk_update_player_stats, check_is_head_coach, add_coach_to_team, get_db_connection, update_player_eligibility, save_team_lineup, get_team_lineups, delete_team_lineup, add_returning_player, get_coach_players_directory, get_team_coaches, search_players_global
 from src.auth import get_current_coach, verify_team_ownership
 from langchain_core.messages import HumanMessage, AIMessage
@@ -329,8 +329,10 @@ async def api_chat(data: ChatRequest, current_coach: dict = Depends(get_current_
 
     async def event_generator():
         try:
+            # Track sources referenced during agent tool execution
+            sources_tracker = []
             # Instantiate agent executor dynamically for the logged-in coach
-            agent_executor = build_agent_executor(current_coach["id"], data.selected_team_id)
+            agent_executor = build_agent_executor(current_coach["id"], data.selected_team_id, sources_tracker=sources_tracker)
             
             # Use astream_events to capture both tool usage and final answer streaming
             async for event in agent_executor.astream_events(
@@ -353,9 +355,14 @@ async def api_chat(data: ChatRequest, current_coach: dict = Depends(get_current_
                         "data": json.dumps({"type": "tool_start", "tool": name})
                     }
                 elif event_type == "on_tool_end":
+                    tool_sources = list(sources_tracker) if name == "search_playbook" else []
                     yield {
                         "event": "message",
-                        "data": json.dumps({"type": "tool_end", "tool": name})
+                        "data": json.dumps({
+                            "type": "tool_end", 
+                            "tool": name,
+                            "sources": tool_sources
+                        })
                     }
         except Exception as e:
             # Fallback to the classic RAG chain if agent execution fails
@@ -379,9 +386,21 @@ async def api_chat(data: ChatRequest, current_coach: dict = Depends(get_current_
                                 "data": json.dumps({"type": "token", "text": content})
                             }
                     elif event_type == "on_retriever_end":
+                        docs = event.get("data", {}).get("output", [])
+                        fallback_sources = []
+                        for d in docs:
+                            src = getattr(d, "metadata", {}).get("source", "")
+                            if src:
+                                name_fmt = format_source_name(src)
+                                if name_fmt not in fallback_sources:
+                                    fallback_sources.append(name_fmt)
                         yield {
                             "event": "message",
-                            "data": json.dumps({"type": "tool_end", "tool": "search_playbook"})
+                            "data": json.dumps({
+                                "type": "tool_end", 
+                                "tool": "search_playbook",
+                                "sources": fallback_sources
+                            })
                         }
             except Exception as fallback_err:
                 print(f"Fallback RAG chain failed: {fallback_err}")
