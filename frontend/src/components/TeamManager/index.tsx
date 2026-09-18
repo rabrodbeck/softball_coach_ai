@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { X, Plus, Users, Pencil, Lock, Upload, ArrowLeft } from 'lucide-react';
-import type { Team, Player, TeamManagerProps } from './types';
+import { sortTeams, type Team, type Player, type TeamManagerProps } from './types';
 
 import { useTeamStore } from '../../store/useTeamStore';
 import { useGameChangerImport } from './hooks/useGameChangerImport';
@@ -342,6 +342,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
     };
 
     const activeTeam = teams.find(t => t.id === selectedTeamId);
+    const sortedTeams = useMemo(() => sortTeams(teams), [teams]);
     const hasPlayers = players.length > 0;
 
     return (
@@ -385,7 +386,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                         <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
                             {isLoading && teams.length === 0 ? (
                                 <p style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>Loading teams...</p>
-                            ) : teams.map((team) => (
+                            ) : sortedTeams.map((team) => (
                                 <div 
                                     key={team.id} 
                                     onClick={() => handleSelectActiveTeam(team)}

@@ -84,3 +84,71 @@ export const normalizeHand = (h: string | null | undefined, fallback = 'Right'):
     if (clean === 'switch') return 'Switch';
     return fallback;
 };
+
+export const parseSeason = (seasonStr?: string) => {
+    if (!seasonStr) return { year: 0, seasonOrder: 99 };
+    const yearMatch = seasonStr.match(/\b(19\d\d|20\d\d)\b/) || seasonStr.match(/'?(\d{2})\b/);
+    let year = 0;
+    if (yearMatch) {
+        year = parseInt(yearMatch[1], 10);
+        if (year < 100) year += 2000;
+    }
+
+    const s = seasonStr.toLowerCase();
+    let seasonOrder = 99;
+    if (s.includes('spring')) seasonOrder = 1;
+    else if (s.includes('summer')) seasonOrder = 2;
+    else if (s.includes('fall') || s.includes('autumn')) seasonOrder = 3;
+    else if (s.includes('winter')) seasonOrder = 4;
+
+    return { year, seasonOrder };
+};
+
+export const parseAgeGroup = (ageStr?: string) => {
+    if (!ageStr) return 999;
+    const match = ageStr.match(/(\d+)/);
+    return match ? parseInt(match[1], 10) : 999;
+};
+
+export const sortTeams = (teamsList: Team[]): Team[] => {
+    return [...teamsList].sort((a, b) => {
+        // 1. Active team always at the top
+        const aActive = Boolean(a.is_active);
+        const bActive = Boolean(b.is_active);
+        if (aActive !== bActive) {
+            return aActive ? -1 : 1;
+        }
+
+        // 2. Season: Year (newest year first)
+        const aSeason = parseSeason(a.season);
+        const bSeason = parseSeason(b.season);
+        if (aSeason.year !== bSeason.year) {
+            return bSeason.year - aSeason.year;
+        }
+
+        // Season within year: Chronological (Spring, Summer, Fall, Winter)
+        if (aSeason.seasonOrder !== bSeason.seasonOrder) {
+            return aSeason.seasonOrder - bSeason.seasonOrder;
+        }
+
+        const seasonCompare = (a.season || '').localeCompare(b.season || '');
+        if (seasonCompare !== 0) {
+            return seasonCompare;
+        }
+
+        // 3. Age Group: numerical order (e.g. 8U, 10U, 12U, 14U)
+        const aAge = parseAgeGroup(a.age_group);
+        const bAge = parseAgeGroup(b.age_group);
+        if (aAge !== bAge) {
+            return aAge - bAge;
+        }
+
+        const ageCompare = (a.age_group || '').localeCompare(b.age_group || '');
+        if (ageCompare !== 0) {
+            return ageCompare;
+        }
+
+        // 4. Team Name: Alphabetical
+        return (a.team_name || '').localeCompare(b.team_name || '');
+    });
+};
