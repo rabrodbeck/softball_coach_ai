@@ -26,6 +26,9 @@ export function RosterTableContainer({
     if (subView === 'pitching') {
       return players.filter((p) => (p.number_of_pitches || 0) >= 1);
     }
+    if (subView === 'catching') {
+      return players.filter((p) => (p.innings_caught || 0) > 0);
+    }
     return players;
   }, [players, subView]);
 
@@ -221,6 +224,8 @@ export function RosterTableContainer({
                 >
                   {subView === 'pitching'
                     ? 'No players with pitches recorded yet.'
+                    : subView === 'catching'
+                    ? 'No players with innings caught recorded yet.'
                     : 'No players found.'}
                 </td>
               </tr>
