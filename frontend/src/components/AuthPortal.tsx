@@ -10,6 +10,11 @@ interface AuthPortalProps {
     onContinueAsGuest: () => void;
 }
 
+interface AuthError {
+    code?: string;
+    message?: string;
+}
+
 type AuthMode = 'menu' | 'login' | 'register' | 'google-complete';
 
 export default function AuthPortal({ onLoginSuccess, onContinueAsGuest }: AuthPortalProps) {
@@ -57,8 +62,9 @@ export default function AuthPortal({ onLoginSuccess, onContinueAsGuest }: AuthPo
                 setCoachName(userDisplayName);
                 setMode('google-complete');
             }
-        } catch (err: any) {
-            setError(err.message || "Google Sign-In failed.");
+        } catch (err: unknown) {
+            const error = err as AuthError;
+            setError(error.message || "Google Sign-In failed.");
         } finally {
             setLoading(false);
         }
@@ -91,8 +97,9 @@ export default function AuthPortal({ onLoginSuccess, onContinueAsGuest }: AuthPo
 
             const profile = await response.json();
             onLoginSuccess(profile);
-        } catch (err: any) {
-            setError(err.message || "Google registration failed.");
+        } catch (err: unknown) {
+            const error = err as AuthError;
+            setError(error.message || "Google registration failed.");
         } finally {
             setLoading(false);
         }
@@ -113,9 +120,10 @@ export default function AuthPortal({ onLoginSuccess, onContinueAsGuest }: AuthPo
                 // 1. Try signing in with Firebase
                 const userCredential = await signInWithEmailAndPassword(auth, email, password);
                 firebaseUser = userCredential.user;
-            } catch (fbErr: any) {
+            } catch (fbErr: unknown) {
+                const fbError = fbErr as AuthError;
                 // 2. If user doesn't exist in Firebase yet but exists in PG, auto-migrate them
-                if (fbErr.code === "auth/user-not-found" || fbErr.code === "auth/invalid-credential" || fbErr.code === "auth/invalid-email") {
+                if (fbError.code === "auth/user-not-found" || fbError.code === "auth/invalid-credential" || fbError.code === "auth/invalid-email") {
                     const dbResponse = await apiFetch(`/api/auth/login`, {
                         method: 'POST',
                         body: JSON.stringify({ username: email, password }),
@@ -158,11 +166,12 @@ export default function AuthPortal({ onLoginSuccess, onContinueAsGuest }: AuthPo
                 throw new Error("Coach profile not registered in database.");
             }
 
-        } catch (err: any) {
-            let errMsg = err.message || "Login failed.";
-            if (err.code === "auth/user-not-found" || err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
+        } catch (err: unknown) {
+            const error = err as AuthError;
+            let errMsg = error.message || "Login failed.";
+            if (error.code === "auth/user-not-found" || error.code === "auth/wrong-password" || error.code === "auth/invalid-credential") {
                 errMsg = "Invalid email or password.";
-            } else if (err.code === "auth/invalid-email") {
+            } else if (error.code === "auth/invalid-email") {
                 errMsg = "Invalid email address format.";
             }
             setError(errMsg);
@@ -217,13 +226,14 @@ export default function AuthPortal({ onLoginSuccess, onContinueAsGuest }: AuthPo
                     onLoginSuccess(data.user);
                 }
             }
-        } catch (err: any) {
-            let errMsg = err.message || "Registration failed.";
-            if (err.code === "auth/email-already-in-use") {
+        } catch (err: unknown) {
+            const error = err as AuthError;
+            let errMsg = error.message || "Registration failed.";
+            if (error.code === "auth/email-already-in-use") {
                 errMsg = "This email is already in use.";
-            } else if (err.code === "auth/weak-password") {
+            } else if (error.code === "auth/weak-password") {
                 errMsg = "Password is too weak. Must be at least 6 characters.";
-            } else if (err.code === "auth/invalid-email") {
+            } else if (error.code === "auth/invalid-email") {
                 errMsg = "Invalid email address format.";
             }
             setError(errMsg);

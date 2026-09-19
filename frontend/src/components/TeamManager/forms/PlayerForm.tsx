@@ -199,8 +199,8 @@ export function PlayerForm({
 
     const [activeTab, setActiveTab] = useState<'new' | 'existing'>('new');
     const [searchQuery, setSearchQuery] = useState('');
-    const [searchResults, setSearchResults] = useState<any[]>([]);
-    const [selectedPlayer, setSelectedPlayer] = useState<any | null>(null);
+    const [searchResults, setSearchResults] = useState<Player[]>([]);
+    const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
 
     const { searchPlayers, addReturningPlayer, isLoading: storeLoading } = useTeamStore();
 
@@ -216,7 +216,7 @@ export function PlayerForm({
         }, 300);
 
         return () => clearTimeout(delayDebounce);
-    }, [searchQuery]);
+    }, [searchQuery, searchPlayers]);
 
     // Handle adding selected returning player
     const handleAddReturningSubmit = async (e: React.FormEvent) => {

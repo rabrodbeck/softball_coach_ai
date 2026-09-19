@@ -3,6 +3,62 @@ import type { Player } from '../types';
 import { apiFetch } from '../../../utils/api';
 import { normalizeHand } from '../types';
 
+export interface ImportedPlayerPreview {
+    existing_id?: number;
+    player_id?: number;
+    matched?: boolean;
+    player_name: string;
+    player_number: number;
+    batting_hand: string;
+    throwing_hand: string;
+    games_played: number;
+    plate_appearances: number;
+    at_bats: number;
+    hits?: number;
+    singles: number;
+    doubles: number;
+    triples: number;
+    home_runs: number;
+    walks: number;
+    strikeouts: number;
+    hit_by_pitches: number;
+    stolen_bases: number;
+    caught_stealing: number;
+    runs_scored: number;
+    runs_batted_in: number;
+    reached_on_error: number;
+    games_pitched: number;
+    games_started: number;
+    innings_pitched: number;
+    batters_faced: number;
+    number_of_pitches: number;
+    hits_allowed: number;
+    runs_allowed: number;
+    earned_runs: number;
+    walks_allowed: number;
+    strikeouts_thrown: number;
+    hit_by_pitches_allowed: number;
+    left_on_base: number;
+    total_chances: number;
+    assists: number;
+    putouts: number;
+    errors: number;
+    innings_caught: number;
+    passed_balls_allowed: number;
+    runners_stolen_bases: number;
+    runners_caught_stealing: number;
+    innings_p: number;
+    innings_c: number;
+    innings_1b: number;
+    innings_2b: number;
+    innings_3b: number;
+    innings_ss: number;
+    innings_lf: number;
+    innings_cf: number;
+    innings_rf: number;
+    [key: string]: unknown;
+}
+
 interface UseGameChangerImportProps {
     selectedTeamId: number | null;
     coachId: number;
@@ -16,7 +72,7 @@ export function useGameChangerImport({
     players,
     fetchPlayers
 }: UseGameChangerImportProps) {
-    const [importPreview, setImportPreview] = useState<any[]>([]);
+    const [importPreview, setImportPreview] = useState<ImportedPlayerPreview[]>([]);
     const [showImportModal, setShowImportModal] = useState(false);
 
     const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -82,7 +138,7 @@ export function useGameChangerImport({
             const battingHeaders = rawHeaders.slice(0, lastBattingColIdx + 1).map(cleanHeader);
             const pitchingHeaders = rawHeaders.slice(54).map(cleanHeader);
 
-            const parsedPlayers: any[] = [];
+            const parsedPlayers: ImportedPlayerPreview[] = [];
             
             for (let i = headerLineIdx + 1; i < lines.length; i++){
                 if (!lines[i].trim()) continue;
@@ -199,6 +255,7 @@ export function useGameChangerImport({
                     games_played: getBattingVal(["GP", "G", "GAMES", "GAMESPLAYED"]),
                     plate_appearances: getBattingVal(["PA", "PLATEAPPEARANCES"]),
                     at_bats: getBattingVal(["AB", "ATBATS"]),
+                    hits: getBattingVal(["H", "HITS", "HIT"]),
                     singles: getBattingVal(["1B", "SINGLES", "SINGLE"]),
                     doubles: getBattingVal(["2B", "DOUBLES", "DOUBLE"]),
                     triples: getBattingVal(["3B", "TRIPLES", "TRIPLE"]),

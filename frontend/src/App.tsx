@@ -34,10 +34,10 @@ function App() {
   // Selected Team tracked in browser session state
   const [selectedTeam, setSelectedTeam] = useState<SelectedTeam | null>(null);
 
-  // Load selected team from localStorage on boot
-  useEffect(() => {
-    if (user) {
-      const cached = localStorage.getItem(`selected_team_${user.id}`);
+  const handleSetUser = (profile: CoachProfile | null) => {
+    setUser(profile);
+    if (profile) {
+      const cached = localStorage.getItem(`selected_team_${profile.id}`);
       if (cached) {
         try {
           setSelectedTeam(JSON.parse(cached));
@@ -45,8 +45,10 @@ function App() {
           console.error("Error parsing selected team cache:", e);
         }
       }
+    } else {
+      setSelectedTeam(null);
     }
-  }, [user]);
+  };
 
   // Handle Firebase session persistence auto-login
   useEffect(() => {
@@ -62,7 +64,7 @@ function App() {
           });
           const data = await res.json();
           if (data.registered) {
-            setUser(data.user);
+            handleSetUser(data.user);
           }
         } catch (err) {
           console.error("Auto-login validation failed:", err);
@@ -78,9 +80,8 @@ function App() {
     } catch (e) {
       console.error("Firebase sign out failed:", e);
     }
-    setUser(null);
+    handleSetUser(null);
     setIsGuest(false);
-    setSelectedTeam(null);
   };
 
   const handleSelectTeam = (team: { id: number; team_name: string; age_group: string; innings_per_game?: number }) => {
@@ -99,7 +100,7 @@ function App() {
   if (!user && !isGuest) {
     return (
       <AuthPortal
-        onLoginSuccess={(profile: CoachProfile) => setUser(profile)}
+        onLoginSuccess={(profile: CoachProfile) => handleSetUser(profile)}
         onContinueAsGuest={() => setIsGuest(true)}
       />
     );
@@ -142,6 +143,7 @@ function App() {
       {/* Main workspace split into sidebar and chat */}
       <div className={`workspace ${sidebarOpen ? 'sidebar-open' : 'sidebar-collapsed'}`}>
         <SideBar
+          key={currentAgeGroup}
           currentDivision={currentAgeGroup}
           isGuest={isGuest}
           selectedTeamId={selectedTeam ? selectedTeam.id : null}

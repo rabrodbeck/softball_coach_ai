@@ -17,7 +17,7 @@ export function FieldingAnalyticsView({
     selectedFielderId,
     onSelectFielder
 }: {
-    players: any[];
+    players: FieldingStats[];
     selectedFielderId: number | null;
     onSelectFielder: (id: number) => void;
 }) {
@@ -29,7 +29,7 @@ export function FieldingAnalyticsView({
         if (fielders.length > 0 && selectedFielderId === null) {
             onSelectFielder(fielders[0].id);
         }
-    }, [fielders, selectedFielderId]);
+    }, [fielders, selectedFielderId, onSelectFielder]);
 
     const activeFielder = fielders.find(f => f.id === selectedFielderId) || fielders[0];
     const activeFpct = activeFielder ? (activeFielder.total_chances > 0 ? (activeFielder.fielding_percentage ?? 0) : 1.0) : 1.0;

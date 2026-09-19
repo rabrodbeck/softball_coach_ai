@@ -1,14 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Save, Shield, AlertCircle } from 'lucide-react';
 import { apiFetch } from '../utils/api';
-
-interface Player {
-    id: number;
-    player_name: string;
-    player_number: number;
-    innings_per_game?: number;
-    eligible_positions?: string;
-}
+import type { Player } from './TeamManager/types';
+import { GameConfigPanel } from './Lineup/GameConfigPanel';
+import { AttendanceChecklist } from './Lineup/AttendanceChecklist';
+import { UnassignedPoolTable } from './Lineup/UnassignedPoolTable';
 
 interface LineupCreatorModalProps {
     teamId: number;
@@ -186,8 +182,7 @@ export default function LineupCreatorModal({ teamId, teamName, inningsPerGame, o
         playerId: number,
         targetInning: number,
         targetKey: string,
-        sourceInning: number | null,
-        _sourceKey: string | null
+        sourceInning: number | null
     ) => {
         // Lineup grids are built per-inning; block dragging players between different innings
         if (sourceInning !== null && sourceInning !== targetInning) return;
@@ -294,81 +289,21 @@ export default function LineupCreatorModal({ teamId, teamName, inningsPerGame, o
                     <div style={{ display: 'flex', gap: '16px', flex: 1, minHeight: 0, overflow: 'hidden' }}>
                         {/* Left Panel: Game Config & Attendance */}
                         <div style={{ width: '220px', display: 'flex', flexDirection: 'column', gap: '12px', flexShrink: 0, overflowY: 'auto', paddingRight: '4px' }}>
-                            {/* Game Configuration Panel */}
-                            <div style={{ 
-                                display: 'flex', 
-                                flexDirection: 'column',
-                                gap: '8px', 
-                                background: 'var(--code-bg)', 
-                                padding: '12px', 
-                                borderRadius: '10px',
-                                border: '1px solid var(--border)'
-                            }}>
-                                <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-h)', fontWeight: 'bold' }}>GAME DETAILS</label>
-                                <div className="input-group">
-                                    <label style={{ fontSize: '11px', color: 'var(--text-d)', fontWeight: 'bold' }}>GAME DATE</label>
-                                    <input type="date" value={gameDate} onChange={(e) => setGameDate(e.target.value)} style={{ width: '100%' }} />
-                                </div>
-                                <div className="input-group">
-                                    <label style={{ fontSize: '11px', color: 'var(--text-d)', fontWeight: 'bold' }}>OPPONENT</label>
-                                    <input type="text" placeholder="e.g. Bartlett Tigers" value={opponent} onChange={(e) => setOpponent(e.target.value)} required style={{ width: '100%' }} />
-                                </div>
-                                <div className="input-group">
-                                    <label style={{ fontSize: '11px', color: 'var(--text-d)', fontWeight: 'bold' }}>INNINGS</label>
-                                    <select value={inningsCount} onChange={(e) => setInningsCount(parseInt(e.target.value))} style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-h)' }}>
-                                        {[3, 4, 5, 6, 7].map(num => (
-                                            <option key={num} value={num}>{num} Innings</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            </div>
+                            <GameConfigPanel
+                                gameDate={gameDate}
+                                setGameDate={setGameDate}
+                                opponent={opponent}
+                                setOpponent={setOpponent}
+                                inningsCount={inningsCount}
+                                setInningsCount={setInningsCount}
+                            />
 
-                            {/* Roster & Attendance Checklist (Listed vertically & alphabetically in a compact two-column layout) */}
-                            <div style={{ background: 'var(--code-bg)', padding: '12px', borderRadius: '10px', border: '1px solid var(--border)' }}>
-                                <label style={{ display: 'block', fontSize: '12px', color: 'var(--text-h)', fontWeight: 'bold', marginBottom: '8px' }}>
-                                    ATTENDANCE ({availablePlayers.length} / {players.length} Available)
-                                </label>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                                    {[...players].sort((a, b) => a.player_name.localeCompare(b.player_name)).map(p => {
-                                        const isAttending = attendance[p.id] !== false;
-                                        return (
-                                            <button 
-                                                key={p.id}
-                                                onClick={() => toggleAttendance(p.id)}
-                                                style={{
-                                                    padding: '6px 8px',
-                                                    borderRadius: '8px',
-                                                    border: '1px solid',
-                                                    borderColor: isAttending ? 'var(--accent)' : 'var(--border)',
-                                                    background: isAttending ? 'var(--accent-bg)' : 'transparent',
-                                                    color: isAttending ? 'var(--accent)' : 'var(--text-d)',
-                                                    cursor: 'pointer',
-                                                    fontSize: '11px',
-                                                    fontWeight: 'bold',
-                                                    textAlign: 'left',
-                                                    display: 'flex',
-                                                    justifyContent: 'space-between',
-                                                    alignItems: 'center',
-                                                    transition: 'all 0.15s',
-                                                    minWidth: 0
-                                                }}
-                                            >
-                                                <span style={{ 
-                                                    overflow: 'hidden', 
-                                                    textOverflow: 'ellipsis', 
-                                                    whiteSpace: 'nowrap', 
-                                                    marginRight: '4px' 
-                                                }} title={`${p.player_name} (#${p.player_number})`}>
-                                                    {p.player_name} #{p.player_number}
-                                                </span>
-                                                <span style={{ fontSize: '11px', flexShrink: 0 }}>
-                                                    {isAttending ? '✓' : '✗'}
-                                                </span>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
+                            <AttendanceChecklist
+                                players={players}
+                                availablePlayers={availablePlayers}
+                                attendance={attendance}
+                                toggleAttendance={toggleAttendance}
+                            />
                         </div>
 
                         {/* Right Panel: Lineup Grid & Pool */}
@@ -462,7 +397,7 @@ export default function LineupCreatorModal({ teamId, teamName, inningsPerGame, o
                                                                 try {
                                                                     const raw = e.dataTransfer.getData("text/plain");
                                                                     const data = JSON.parse(raw);
-                                                                    handleDrop(data.playerId, inningIdx, pos.key, data.sourceInning, data.sourceKey);
+                                                                    handleDrop(data.playerId, inningIdx, pos.key, data.sourceInning);
                                                                 } catch (err) {
                                                                     console.error(err);
                                                                 }
@@ -568,7 +503,7 @@ export default function LineupCreatorModal({ teamId, teamName, inningsPerGame, o
                                                                 try {
                                                                     const raw = e.dataTransfer.getData("text/plain");
                                                                     const data = JSON.parse(raw);
-                                                                    handleDrop(data.playerId, inningIdx, benchKey, data.sourceInning, data.sourceKey);
+                                                                    handleDrop(data.playerId, inningIdx, benchKey, data.sourceInning);
                                                                 } catch (err) {
                                                                         console.error(err);
                                                                 }
@@ -674,98 +609,15 @@ export default function LineupCreatorModal({ teamId, teamName, inningsPerGame, o
                             </div>
 
                             {/* Bottom Pane: Unassigned Pool */}
-                            <div 
-                                ref={bottomScrollRef}
-                                onScroll={handleBottomScroll}
-                                style={{ 
-                                    flex: 1, 
-                                    overflowX: 'auto', 
-                                    overflowY: 'auto', 
-                                    border: '1px solid var(--border)', 
-                                    borderRadius: '0 0 10px 10px', 
-                                    background: 'var(--bg)' 
-                                }}
-                            >
-                                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: `${150 + inningsCount * 180}px` }}>
-                                    <tbody>
-                                        <tr style={{ background: 'var(--code-bg)' }}>
-                                            <td style={{ 
-                                                padding: '8px 12px', 
-                                                fontWeight: 'bold', 
-                                                color: 'var(--text-h)', 
-                                                borderRight: '1px solid var(--border)', 
-                                                position: 'sticky',
-                                                left: 0,
-                                                width: '150px',
-                                                minWidth: '150px',
-                                                background: 'var(--code-bg)',
-                                                zIndex: 20,
-                                                fontSize: '11px'
-                                            }}>
-                                                UNASSIGNED POOL
-                                            </td>
-                                            {Array.from({ length: inningsCount }).map((_, inningIdx) => {
-                                                const unassigned = getUnassignedPlayers(inningIdx);
-                                                return (
-                                                    <td 
-                                                        key={inningIdx} 
-                                                        style={{ 
-                                                            padding: '4px 6px', 
-                                                            verticalAlign: 'top', 
-                                                            minWidth: '180px'
-                                                        }}
-                                                        onDragOver={(e) => e.preventDefault()}
-                                                        onDrop={(e) => {
-                                                            try {
-                                                                const raw = e.dataTransfer.getData("text/plain");
-                                                                const data = JSON.parse(raw);
-                                                                // If dragged from a grid cell in this inning, return it to the unassigned pool
-                                                                if (data.sourceInning === inningIdx && data.sourceKey) {
-                                                                    handleRemoveAssignment(inningIdx, data.sourceKey);
-                                                                }
-                                                            } catch (err) {
-                                                                console.error(err);
-                                                            }
-                                                        }}
-                                                    >
-                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minHeight: '30px', alignItems: 'stretch' }}>
-                                                            {unassigned.map(p => (
-                                                                <div 
-                                                                    key={p.id}
-                                                                    draggable
-                                                                    onDragStart={(e) => handleDragStart(e, p.id, inningIdx, null)}
-                                                                    onDragEnd={() => setDraggedPlayerId(null)}
-                                                                    style={{
-                                                                        padding: '3px 6px',
-                                                                        background: 'var(--accent-bg)',
-                                                                        border: '1px solid var(--accent)',
-                                                                        borderRadius: '4px',
-                                                                        fontSize: '11px',
-                                                                        color: 'var(--accent)',
-                                                                        fontWeight: 'bold',
-                                                                        textAlign: 'center',
-                                                                        cursor: 'grab',
-                                                                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                                                                        transition: 'all 0.15s',
-                                                                        whiteSpace: 'nowrap',
-                                                                        width: '100%',
-                                                                        boxSizing: 'border-box'
-                                                                    }}
-                                                                >
-                                                                    {p.player_name} #{p.player_number}
-                                                                </div>
-                                                            ))}
-                                                            {unassigned.length === 0 && (
-                                                                <div style={{ fontSize: '11px', color: 'var(--accent)', textAlign: 'center', padding: '4px 0' }}>All placed! 🎉</div>
-                                                            )}
-                                                        </div>
-                                                    </td>
-                                                );
-                                            })}
-                                        </tr>
-                                    </tbody>
-                                </table>
-                            </div>
+                            <UnassignedPoolTable
+                                inningsCount={inningsCount}
+                                bottomScrollRef={bottomScrollRef}
+                                handleBottomScroll={handleBottomScroll}
+                                getUnassignedPlayers={getUnassignedPlayers}
+                                handleDragStart={handleDragStart}
+                                setDraggedPlayerId={setDraggedPlayerId}
+                                handleRemoveAssignment={handleRemoveAssignment}
+                            />
 
                         {/* Modal Footer Controls */}
                         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '10px' }}>

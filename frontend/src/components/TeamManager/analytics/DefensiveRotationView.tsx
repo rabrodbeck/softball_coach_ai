@@ -1,18 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+
+export type PositionInningsKey = 'innings_p' | 'innings_c' | 'innings_1b' | 'innings_2b' | 'innings_3b' | 'innings_ss' | 'innings_lf' | 'innings_cf' | 'innings_rf';
 
 export interface PlayerPositionStats {
     id: number;
     player_name: string;
     player_number: number;
-    innings_p: number;
-    innings_c: number;
-    innings_1b: number;
-    innings_2b: number;
-    innings_3b: number;
-    innings_ss: number;
-    innings_lf: number;
-    innings_cf: number;
-    innings_rf: number;
+    innings_p?: number;
+    innings_c?: number;
+    innings_1b?: number;
+    innings_2b?: number;
+    innings_3b?: number;
+    innings_ss?: number;
+    innings_lf?: number;
+    innings_cf?: number;
+    innings_rf?: number;
 }
 
 export function DefensiveRotationView({
@@ -20,13 +22,13 @@ export function DefensiveRotationView({
     selectedPosition,
     onSelectPosition
 }: {
-    players: any[];
+    players: PlayerPositionStats[];
     selectedPosition: string | null;
     onSelectPosition: (pos: string) => void;
 }) {
     const [selectedFielderId, setSelectedFielderId] = useState<number | null>(null);
 
-    const positionKeys: Record<string, string> = {
+    const positionKeys: Record<string, PositionInningsKey> = {
         'P': 'innings_p',
         'C': 'innings_c',
         '1B': 'innings_1b',
@@ -38,23 +40,18 @@ export function DefensiveRotationView({
         'RF': 'innings_rf'
     };
 
-    useEffect(() => {
-        if (players.length > 0 && selectedFielderId === null) {
-            setSelectedFielderId(players[0].id);
-        }
-    }, [players, selectedFielderId]);
-
     const getPositionLeader = (pos: string) => {
         const key = positionKeys[pos];
         const sorted = [...players].sort((a, b) => (b[key] ?? 0) - (a[key] ?? 0));
         const leader = sorted[0];
-        if (leader && (leader[key] ?? 0) > 0) {
-            return { name: leader.player_name.split(' ')[0], innings: leader[key] };
+        const leaderInnings = leader ? (leader[key] ?? 0) : 0;
+        if (leader && leaderInnings > 0) {
+            return { name: leader.player_name.split(' ')[0], innings: leaderInnings };
         }
         return { name: "None", innings: 0.0 };
     };
 
-    const activePlayer = players.find(p => p.id === selectedFielderId) || players[0];
+    const activePlayer = (selectedFielderId !== null ? players.find(p => p.id === selectedFielderId) : null) || players[0];
     
     const playerPositionData = Object.keys(positionKeys).map(pos => {
         const key = positionKeys[pos];

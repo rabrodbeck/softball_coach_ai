@@ -22,22 +22,22 @@ export function useRosterSortFilter(players: Player[]) {
             result = result.filter(p => p.player_name.toLowerCase().includes(q) || p.player_number.toString().includes(q));
         }
 
-        return [...result].sort((a: any, b: any) => {
-      let valA = a[sortField];
-      let valB = b[sortField];
-      if (valA === undefined || valA === null) valA = '';
-      if (valB === undefined || valB === null) valB = '';
-      if (typeof valA === 'string') {
-        return sortDirection === 'asc'
-          ? valA.localeCompare(valB)
-          : valB.localeCompare(valA);
-      } else {
-        return sortDirection === 'asc'
-          ? valA - valB
-          : valB - valA;
-      }
-    });
-  }, [players, searchQuery, sortField, sortDirection]);
+        return [...result].sort((a: Player, b: Player) => {
+            const rawValA = a[sortField];
+            const rawValB = b[sortField];
+            const valA = (rawValA === undefined || rawValA === null) ? '' : rawValA;
+            const valB = (rawValB === undefined || rawValB === null) ? '' : rawValB;
+            if (typeof valA === 'string' || typeof valB === 'string') {
+                return sortDirection === 'asc'
+                    ? String(valA).localeCompare(String(valB))
+                    : String(valB).localeCompare(String(valA));
+            } else {
+                return sortDirection === 'asc'
+                    ? Number(valA) - Number(valB)
+                    : Number(valB) - Number(valA);
+            }
+        });
+    }, [players, searchQuery, sortField, sortDirection]);
   return {
     searchQuery,
     setSearchQuery,

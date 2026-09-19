@@ -29,8 +29,8 @@ export function InviteCoachForm({ teamId, coachId, onInviteSuccess }: InviteCoac
             setMessage({ type: 'success', text: `Success! Added ${data.coach_name} to the team.` });
             setEmail('');
             onInviteSuccess();
-        } catch (err: any) {
-            setMessage({ type: 'error', text: err.message });
+        } catch (err: unknown) {
+            setMessage({ type: 'error', text: err instanceof Error ? err.message : String(err) });
         } finally {
             setLoading(false);
         }
@@ -50,7 +50,7 @@ export function InviteCoachForm({ teamId, coachId, onInviteSuccess }: InviteCoac
                 />
                 <select 
                     value={role} 
-                    onChange={(e) => setRole(e.target.value as any)}
+                    onChange={(e) => setRole(e.target.value as 'Head Coach' | 'Assistant Coach')}
                     style={{ padding: '6px 8px', borderRadius: '4px', border: '1px solid var(--border)', background: 'var(--card-bg)', color: 'var(--text-h)', fontSize: '12px' }}
                 >
                     <option value="Assistant Coach">Assistant (Read-Only)</option>

@@ -9,13 +9,13 @@ export interface BattingStats {
     at_bats: number;
     batting_average: number;
     on_base_percentage: number;
-    slugging_percentage: number;
-    ops: number;
-    isolated_power: number;
-    bb_k_ratio: number;
+    slugging_percentage?: number;
+    ops?: number;
+    isolated_power?: number;
+    bb_k_ratio?: number;
     stolen_bases: number;
     caught_stealing: number;
-    stolen_base_percentage: number;
+    stolen_base_percentage?: number;
     walks: number;
     strikeouts: number;
     runs_scored: number;
@@ -27,7 +27,7 @@ export function BattingAnalyticsView({
     selectedBatterId,
     onSelectBatter
 }: {
-    players: any[];
+    players: BattingStats[];
     selectedBatterId: number | null;
     onSelectBatter: (id: number) => void;
 }) {
@@ -39,7 +39,7 @@ export function BattingAnalyticsView({
         if (batters.length > 0 && selectedBatterId === null) {
             onSelectBatter(batters[0].id);
         }
-    }, [batters, selectedBatterId]);
+    }, [batters, selectedBatterId, onSelectBatter]);
 
     const activeBatter = batters.find(b => b.id === selectedBatterId) || batters[0];
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { ClipboardList, Trophy } from 'lucide-react';
 
 interface SidebarProps {
@@ -10,11 +10,13 @@ interface SidebarProps {
 
 export default function Sidebar({ currentDivision, isGuest, selectedTeamId, onCreateLineup }: SidebarProps) {
     const [selectedAge, setSelectedAge] = useState(currentDivision);
-    
-    // Sync dropdown state whenever active team division changes
-    useEffect(() => {
+    const [prevDivision, setPrevDivision] = useState(currentDivision);
+
+    // Sync dropdown state whenever active team division changes without cascading render effects
+    if (prevDivision !== currentDivision) {
+        setPrevDivision(currentDivision);
         setSelectedAge(currentDivision);
-    }, [currentDivision]);
+    }
 
     const handleGeneratePlaybook = () => {
         const macroPrompt = `Build a comprehensive practice plan template for a ${selectedAge} fastpitch softball team that lasts 90 minutes.`;

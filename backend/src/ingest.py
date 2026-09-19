@@ -1,13 +1,16 @@
 import os
+import warnings
 from dotenv import load_dotenv
-from langchain_community.document_loaders import PyPDFLoader, DirectoryLoader, TextLoader
+
+# Suppress PGVector deprecation warning from langchain_community
+warnings.filterwarnings("ignore", category=UserWarning, module="langchain_community.vectorstores.pgvector")
 
 load_dotenv()
 
 # ==========================
 # Document Loaders
 # ==========================
-from langchain_community.document_loaders import DirectoryLoader, TextLoader
+from langchain_community.document_loaders import PyPDFLoader, DirectoryLoader, TextLoader
 
 # ==========================
 # Text Splitter
@@ -61,15 +64,22 @@ def split_documents(documents):
     txt_docs = [doc for doc in documents if doc.metadata.get("source", "").endswith(".txt")]
     pdf_docs = [doc for doc in documents if doc.metadata.get("source", "").endswith(".pdf")]
     
-    # Split only text documents
+    # Split text documents
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=800,
         chunk_overlap=150,
     )
     txt_chunks = text_splitter.split_documents(txt_docs)
     
-    # Combine the split text chunks with the unsplit PDF page documents
-    final_chunks = txt_chunks + pdf_docs
+    # Split PDF documents into chunks (preserves dense playbook / rulebook resolution)
+    pdf_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1000,
+        chunk_overlap=200,
+    )
+    pdf_chunks = pdf_splitter.split_documents(pdf_docs)
+    
+    # Combine the split text chunks with split PDF chunks
+    final_chunks = txt_chunks + pdf_chunks
     
     # Normalize source paths to use forward slashes for cross-platform compatibility and SQL safety
     for chunk in final_chunks:
@@ -77,7 +87,7 @@ def split_documents(documents):
             chunk.metadata["source"] = chunk.metadata["source"].replace("\\", "/")
     
     print(f"Created {len(txt_chunks)} chunks from {len(txt_docs)} text documents")
-    print(f"Kept {len(pdf_docs)} PDF pages as whole chunks")
+    print(f"Created {len(pdf_chunks)} chunks from {len(pdf_docs)} PDF documents")
     print(f"Total database chunks: {len(final_chunks)}")
     return final_chunks
 
@@ -91,13 +101,15 @@ def build_vectorstore(chunks):
 
     print("[DB] Connecting to Supabase, clearing old database, and sending vectors...this may take a moment...")
 
-    vectorstore = PGVector.from_documents(
-        documents=chunks,
-        embedding=embeddings,
-        connection_string=connection_string,
-        collection_name="softball_playbook",
-        pre_delete_collection=True
-    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        vectorstore = PGVector.from_documents(
+            documents=chunks,
+            embedding=embeddings,
+            connection_string=connection_string,
+            collection_name="softball_playbook",
+            pre_delete_collection=True
+        )
 
     print(f"[SUCCESS] Supabase Database successfully seeded with {len(chunks)} chunks!")
     return vectorstore

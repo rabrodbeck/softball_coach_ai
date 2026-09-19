@@ -1,7 +1,7 @@
 import os
 import time
 import jwt
-import requests
+import httpx
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from cryptography.x509 import load_pem_x509_certificate
@@ -14,26 +14,30 @@ FIREBASE_PROJECT_ID = os.environ.get("FIREBASE_PROJECT_ID", "softball-coach-ai")
 _public_keys = {}
 _keys_expiry = 0
 
-def get_firebase_public_keys():
+async def get_firebase_public_keys():
     global _public_keys, _keys_expiry
     now = time.time()
     if not _public_keys or now > _keys_expiry:
         url = "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com"
-        res = requests.get(url)
-        if res.ok:
-            _public_keys = res.json()
-            cache_control = res.headers.get("cache-control", "")
-            max_age = 3600
-            for part in cache_control.split(","):
-                if "max-age" in part:
-                    try:
-                        max_age = int(part.split("=")[1])
-                    except ValueError:
-                        pass
-            _keys_expiry = now + max_age
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                res = await client.get(url)
+                if res.is_success:
+                    _public_keys = res.json()
+                    cache_control = res.headers.get("cache-control", "")
+                    max_age = 3600
+                    for part in cache_control.split(","):
+                        if "max-age" in part:
+                            try:
+                                max_age = int(part.split("=")[1])
+                            except ValueError:
+                                pass
+                    _keys_expiry = now + max_age
+        except Exception as e:
+            print(f"Warning: Failed to fetch Firebase public keys: {e}")
     return _public_keys
 
-def verify_firebase_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+async def verify_firebase_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
     """FastAPI Dependency: Extracts values and validates the Firebase ID token in authorization headers."""
     token = credentials.credentials
     try:
@@ -45,7 +49,7 @@ def verify_firebase_token(credentials: HTTPAuthorizationCredentials = Depends(se
             raise HTTPException(status_code=401, detail="Token headers missing kid.")
         
         # Match with current Google certificates
-        public_keys = get_firebase_public_keys()
+        public_keys = await get_firebase_public_keys()
         cert = public_keys.get(kid)
         if not cert:
             print(f"Auth Error: Invalid key ID (kid) '{kid}' for token.")
@@ -71,7 +75,7 @@ def verify_firebase_token(credentials: HTTPAuthorizationCredentials = Depends(se
         print(f"Auth Error: Invalid token: {e} | Project ID: '{FIREBASE_PROJECT_ID}' | Headers: {jwt.get_unverified_header(token)}")
         raise HTTPException(status_code=401, detail=f"Invalid authentication token: {str(e)}")
     
-def get_current_coach(token_payload: dict = Depends(verify_firebase_token)) -> dict:
+async def get_current_coach(token_payload: dict = Depends(verify_firebase_token)) -> dict:
     """FastAPI Dependency: Fetches the authenticated coach profile using the email from token."""
     email = token_payload.get("email")
     if not email:
@@ -82,7 +86,7 @@ def get_current_coach(token_payload: dict = Depends(verify_firebase_token)) -> d
         raise HTTPException(status_code=404, detail="Coach profile not registered in database")
     return coach
 
-def verify_team_ownership(team_id: int, current_coach: dict = Depends(get_current_coach)):
+async def verify_team_ownership(team_id: int, current_coach: dict = Depends(get_current_coach)):
     """FastAPI Dependency: Raises a 403 error if the authenticated coach is not associate with this team."""
     conn = get_db_connection()
     cursor = conn.cursor()

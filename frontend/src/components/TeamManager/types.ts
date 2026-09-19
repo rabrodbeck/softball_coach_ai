@@ -67,6 +67,27 @@ export interface Player {
     runners_stolen_bases: number;
     runners_caught_stealing: number;
     caught_stealing_percentage: number;
+    // Optional analytics and position innings
+    slugging_percentage?: number;
+    ops?: number;
+    isolated_power?: number;
+    bb_k_ratio?: number;
+    stolen_base_percentage?: number;
+    k7?: number;
+    bb7?: number;
+    pitches_per_inning?: number;
+    k_bb_ratio?: number;
+    innings_p?: number;
+    innings_c?: number;
+    innings_1b?: number;
+    innings_2b?: number;
+    innings_3b?: number;
+    innings_ss?: number;
+    innings_lf?: number;
+    innings_cf?: number;
+    innings_rf?: number;
+    team_name?: string;
+    season?: string;
 }
 
 export interface TeamManagerProps {

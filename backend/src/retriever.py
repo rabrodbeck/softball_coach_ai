@@ -1,5 +1,9 @@
 import os
+import warnings
 from dotenv import load_dotenv
+
+# Suppress PGVector deprecation warning from langchain_community
+warnings.filterwarnings("ignore", category=UserWarning, module="langchain_community.vectorstores.pgvector")
 
 # Core
 from langchain_community.vectorstores import PGVector
@@ -57,11 +61,13 @@ def get_vectorstore():
         
         connection_string = os.environ.get("DATABASE_URL", "").replace("postgresql://", "postgresql+psycopg2://")
         
-        _vectorstore = PGVector(
-            connection_string=connection_string,
-            embedding_function=embeddings,
-            collection_name="softball_playbook"
-        )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            _vectorstore = PGVector(
+                connection_string=connection_string,
+                embedding_function=embeddings,
+                collection_name="softball_playbook"
+            )
     return _vectorstore
 
 def build_chain():

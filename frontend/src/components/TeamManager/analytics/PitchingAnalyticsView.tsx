@@ -16,14 +16,14 @@ export interface PitchingStats {
     strikeouts_thrown: number;
     era: number;
     whip: number;
-    k7: number;
-    bb7: number;
-    pitches_per_inning: number;
-    k_bb_ratio: number;
+    k7?: number;
+    bb7?: number;
+    pitches_per_inning?: number;
+    k_bb_ratio?: number;
 }
 
 interface PitchingAnalyticsViewProps {
-    players: any[]; 
+    players: PitchingStats[]; 
     selectedPitcherId: number | null; 
     onSelectPitcher: (id: number) => void;
     inningsPerGame?: number;
@@ -61,7 +61,7 @@ export function PitchingAnalyticsView({
     const chartW = plotW - marginL - 20;
     const chartH = plotH - marginB - 20;
 
-    const pitchesArray = pitchers.map(p => p.pitches_per_inning);
+    const pitchesArray = pitchers.map(p => p.pitches_per_inning ?? 0);
     const whipArray = pitchers.map(p => p.whip);
 
     const minX = Math.max(5, Math.min(10, ...pitchesArray) - 1);
@@ -111,9 +111,9 @@ export function PitchingAnalyticsView({
     const getRadarPoints = (pitcher: PitchingStats) => {
         const runPrevention = Math.max(0, 100 - (pitcher.era * 10));
         const runnerControl = Math.max(0, 100 - ((pitcher.whip - 0.5) * 40));
-        const missedBats = Math.min(100, pitcher.k7 * (50 / inningsPerGame));
-        const command = Math.max(0, 100 - (pitcher.bb7 * (116.67 / inningsPerGame)));
-        const efficiency = Math.max(0, 100 - ((pitcher.pitches_per_inning - 10) * 8.33));
+        const missedBats = Math.min(100, (pitcher.k7 ?? 0) * (50 / inningsPerGame));
+        const command = Math.max(0, 100 - ((pitcher.bb7 ?? 0) * (116.67 / inningsPerGame)));
+        const efficiency = Math.max(0, 100 - (((pitcher.pitches_per_inning ?? 0) - 10) * 8.33));
 
         const scores = [runPrevention, runnerControl, missedBats, command, efficiency];
         
@@ -182,7 +182,7 @@ export function PitchingAnalyticsView({
 
                     {/* Draw Pitcher Nodes */}
                     {sortedPitchersForPlot.map(p => {
-                        const cx = getPlotX(p.pitches_per_inning);
+                        const cx = getPlotX(p.pitches_per_inning ?? 0);
                         const cy = getPlotY(p.whip);
                         const isSelected = p.id === activePitcher.id;
                         const isHovered = p.id === hoveredPitcherId;
@@ -228,7 +228,7 @@ export function PitchingAnalyticsView({
                         (() => {
                             const hp = pitchers.find(p => p.id === hoveredPitcherId);
                             if (!hp) return null;
-                            const tx = getPlotX(hp.pitches_per_inning);
+                            const tx = getPlotX(hp.pitches_per_inning ?? 0);
                             const ty = getPlotY(hp.whip);
                             const tooltipW = 120;
                             const tooltipH = 50;
@@ -251,7 +251,7 @@ export function PitchingAnalyticsView({
                                         {hp.player_name}
                                     </text>
                                     <text x="8" y="29" fill="var(--text)" fontSize="8px">
-                                        Pitches/IP: {hp.pitches_per_inning.toFixed(1)}
+                                        Pitches/IP: {(hp.pitches_per_inning ?? 0).toFixed(1)}
                                     </text>
                                     <text x="8" y="41" fill="var(--text)" fontSize="8px">
                                         WHIP: {hp.whip.toFixed(2)}
@@ -395,7 +395,7 @@ export function PitchingAnalyticsView({
                         <div style={{ background: 'var(--code-bg)', padding: '8px 12px', borderRadius: '8px', borderLeft: '3px solid #f59e0b' }}>
                             <div style={{ fontSize: '10px', textTransform: 'uppercase', opacity: 0.7 }}>Pitches/Inning</div>
                             <div style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--text)' }}>
-                                {activePitcher.pitches_per_inning.toFixed(1)}
+                                {(activePitcher.pitches_per_inning ?? 0).toFixed(1)}
                             </div>
                         </div>
                     </div>
@@ -405,15 +405,15 @@ export function PitchingAnalyticsView({
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginTop: '16px', borderTop: '1px solid var(--border)', paddingTop: '12px' }}>
                     <div style={{ textAlign: 'center' }}>
                         <div style={{ fontSize: '10px', opacity: 0.7 }}>K/{inningsPerGame}</div>
-                        <div style={{ fontSize: '14px', fontWeight: 'bold' }}>{activePitcher.k7.toFixed(2)}</div>
+                        <div style={{ fontSize: '14px', fontWeight: 'bold' }}>{(activePitcher.k7 ?? 0).toFixed(2)}</div>
                     </div>
                     <div style={{ textAlign: 'center' }}>
                         <div style={{ fontSize: '10px', opacity: 0.7 }}>BB/{inningsPerGame}</div>
-                        <div style={{ fontSize: '14px', fontWeight: 'bold' }}>{activePitcher.bb7.toFixed(2)}</div>
+                        <div style={{ fontSize: '14px', fontWeight: 'bold' }}>{(activePitcher.bb7 ?? 0).toFixed(2)}</div>
                     </div>
                     <div style={{ textAlign: 'center' }}>
                         <div style={{ fontSize: '10px', opacity: 0.7 }}>K/BB Ratio</div>
-                        <div style={{ fontSize: '14px', fontWeight: 'bold' }}>{activePitcher.k_bb_ratio.toFixed(2)}</div>
+                        <div style={{ fontSize: '14px', fontWeight: 'bold' }}>{(activePitcher.k_bb_ratio ?? 0).toFixed(2)}</div>
                     </div>
                 </div>
             </div>

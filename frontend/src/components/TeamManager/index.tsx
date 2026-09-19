@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { X, Plus, Users, Pencil, Lock, Upload, ArrowLeft } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { X, Users, ArrowLeft } from 'lucide-react';
 import { sortTeams, type Team, type Player, type TeamManagerProps } from './types';
 
 import { useTeamStore } from '../../store/useTeamStore';
@@ -8,6 +8,8 @@ import { useGameChangerImport } from './hooks/useGameChangerImport';
 import { TeamForm } from './forms/TeamForm';
 import { PlayerForm } from './forms/PlayerForm';
 import { InviteCoachForm } from './forms/InviteCoachForm';
+import { TeamSidebar } from './TeamSidebar';
+import { WorkspaceHeader } from './WorkspaceHeader';
 
 import { BattingAnalyticsView } from './analytics/BattingAnalyticsView';
 import { PitchingAnalyticsView } from './analytics/PitchingAnalyticsView';
@@ -107,49 +109,7 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
     const [runnersCaughtStealing, setRunnersCaughtStealing] = useState(0);
     const [eligiblePositions, setEligiblePositions] = useState('P,C,1B,2B,3B,SS,LF,CF,RF');
 
-    // Initial load
-    useEffect(() => {
-        fetchTeams(coachId, selectedTeamId, onSelectTeam);
-    }, []);
-
-    // Load coaches and reset forms when team changes
-    useEffect(() => {
-        if (selectedTeamId) {
-            fetchTeamCoaches(selectedTeamId);
-            cancelForms();
-        }
-    }, [selectedTeamId]);
-
-    // Fetch players roster when team changes or stats toggle is switched
-    useEffect(() => {
-        if (selectedTeamId) {
-            fetchPlayers(selectedTeamId, statsMode);
-        }
-    }, [selectedTeamId, statsMode]);
-
-    // Update store state when parent passes new team
-    const handleSelectActiveTeam = (team: Team) => {
-        setSelectedTeamId(team.id);
-        setUserRole(team.role || null);
-        onSelectTeam(team);
-        setMobileActiveView('detail');
-    };
-
-    // Instantiate hook for CSV uploads
-    const {
-        importPreview,
-        showImportModal,
-        setShowImportModal,
-        handleFileImport,
-        handleConfirmImport
-    } = useGameChangerImport({
-        selectedTeamId,
-        coachId,
-        players,
-        fetchPlayers: () => fetchPlayers(selectedTeamId || 0)
-    });
-
-    const cancelForms = () => {
+    const cancelForms = useCallback(() => {
         setShowTeamForm(false);
         setEditingTeam(null);
         setShowPlayerForm(false);
@@ -206,7 +166,49 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
         setRunnersStolenBases(0);
         setRunnersCaughtStealing(0);
         setEligiblePositions('P,C,1B,2B,3B,SS,LF,CF,RF');
+    }, []);
+
+    // Initial load
+    useEffect(() => {
+        fetchTeams(coachId, selectedTeamId, onSelectTeam);
+    }, [coachId, selectedTeamId, onSelectTeam, fetchTeams]);
+
+    // Load coaches when team changes
+    useEffect(() => {
+        if (selectedTeamId) {
+            fetchTeamCoaches(selectedTeamId);
+        }
+    }, [selectedTeamId, fetchTeamCoaches]);
+
+    // Fetch players roster when team changes or stats toggle is switched
+    useEffect(() => {
+        if (selectedTeamId) {
+            fetchPlayers(selectedTeamId, statsMode);
+        }
+    }, [selectedTeamId, statsMode, fetchPlayers]);
+
+    // Update store state when parent passes new team
+    const handleSelectActiveTeam = (team: Team) => {
+        setSelectedTeamId(team.id);
+        setUserRole(team.role || null);
+        onSelectTeam(team);
+        cancelForms();
+        setMobileActiveView('detail');
     };
+
+    // Instantiate hook for CSV uploads
+    const {
+        importPreview,
+        showImportModal,
+        setShowImportModal,
+        handleFileImport,
+        handleConfirmImport
+    } = useGameChangerImport({
+        selectedTeamId,
+        coachId,
+        players,
+        fetchPlayers: () => fetchPlayers(selectedTeamId || 0)
+    });
 
     const handleCreateTeamSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -372,62 +374,17 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
 
                 <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
                     
-                    {/* Sidebar: Teams List */}
-                    <div 
-                        className={`team-manager-sidebar ${mobileActiveView === 'list' ? 'mobile-visible' : 'mobile-hidden'}`}
-                        style={{ width: '280px', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', background: 'var(--sidebar-bg)' }}
-                    >
-                        <div style={{ padding: '16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontWeight: 'bold', color: 'var(--text-secondary)', fontSize: '12px', textTransform: 'uppercase' }}>My Teams</span>
-                            <button onClick={() => setShowTeamForm(true)} className="btn-add-team" style={{ padding: '4px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                <Plus size={12} /> New Team
-                            </button>
-                        </div>
-                        <div style={{ flex: 1, overflowY: 'auto', padding: '8px' }}>
-                            {isLoading && teams.length === 0 ? (
-                                <p style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '13px' }}>Loading teams...</p>
-                            ) : sortedTeams.map((team) => (
-                                <div 
-                                    key={team.id} 
-                                    onClick={() => handleSelectActiveTeam(team)}
-                                    className={`team-card ${team.id === selectedTeamId ? 'active' : ''}`}
-                                    style={{
-                                        padding: '16px',
-                                        borderRadius: '8px',
-                                        cursor: 'pointer',
-                                        marginBottom: '12px',
-                                        background: team.id === selectedTeamId ? 'var(--accent-bg)' : 'var(--bg)',
-                                        border: team.id === selectedTeamId ? '2px solid var(--accent)' : '1px solid var(--border)',
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center',
-                                        transition: 'all 0.2s ease'
-                                    }}
-                                >
-                                    <div>
-                                        <div style={{ fontWeight: '600', color: team.id === selectedTeamId ? 'var(--text-h)' : 'var(--text-p)' }}>{team.team_name}</div>
-                                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>{team.season} • {team.age_group}</div>
-                                    </div>
-                                    <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-                                        <div className="team-stats" style={{ display: 'flex', gap: '8px', fontSize: '13px', fontWeight: 'bold' }}>
-                                            <span style={{ color: '#22c55e' }}>{team.wins}W</span>
-                                            <span style={{ color: '#ef4444' }}>{team.losses}L</span>
-                                            <span style={{ color: '#94a3b8' }}>{team.ties}T</span>
-                                        </div>
-                                        {team.role === 'Head Coach' && (
-                                            <button 
-                                                onClick={(e) => startEditingTeam(team, e)} 
-                                                className="btn-edit-team-pencil"
-                                                style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center' }}
-                                            >
-                                                <Pencil size={15} />
-                                            </button>
-                                        )}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
+                    {/* Modular Sidebar: Teams List */}
+                    <TeamSidebar
+                        mobileActiveView={mobileActiveView}
+                        isLoading={isLoading}
+                        teams={teams}
+                        sortedTeams={sortedTeams}
+                        selectedTeamId={selectedTeamId}
+                        onSelectTeam={handleSelectActiveTeam}
+                        onAddTeam={() => setShowTeamForm(true)}
+                        onEditTeam={startEditingTeam}
+                    />
 
                     {/* Main Area: Roster/Details */}
                     <div 
@@ -563,130 +520,15 @@ export default function TeamManager({ coachId, onClose, selectedTeamId, onSelect
                             // Roster Dashboard view
                             <>
                                 {/* Workspace Header controls */}
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', width: '100%', marginBottom: '16px' }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '48px' }}>
-                                        <div>
-                                            {/* Team Roster Header */}
-                                            <h1 style={{ margin: 0, fontSize: '24px', color: 'var(--text-h)' }}>{activeTeam?.team_name} Roster</h1>
-                                            
-                                            {/* Season Subtitle */}
-                                            <div style={{ fontSize: '15px', color: 'var(--text-h)', marginTop: '4px', fontWeight: '500' }}>
-                                                {activeTeam?.season} • {activeTeam?.age_group}
-                                            </div>
-                                            
-                                            {/* Team Record */}
-                                            <p style={{ margin: '4px 0 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                                                Record: {activeTeam?.wins}W - {activeTeam?.losses}L - {activeTeam?.ties}T
-                                            </p>
-                                        </div>
-                                        
-                                        {activeTeamCoaches && (
-                                            <div style={{ fontSize: '13px', color: 'var(--text-secondary)', borderLeft: '1px solid var(--border)', paddingLeft: '24px' }}>
-                                                <div><strong>Head Coach:</strong> {activeTeamCoaches.head_coaches}</div>
-                                                {activeTeamCoaches.assistant_coaches && (
-                                                    <div style={{ marginTop: '4px' }}><strong>Assistant Coach:</strong> {activeTeamCoaches.assistant_coaches}</div>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-                                    
-                                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '12px' }}>
-                                        {/* Row 1: Actions Buttons */}
-                                        <div style={{ display: 'flex', gap: '10px' }}>
-                                            {userRole === 'Assistant Coach' ? (
-                                                <div className="assistant-lock" style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.05)', padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                                                    <Lock size={13} /> Read-Only Mode (Assistant Coach)
-                                                </div>
-                                            ) : (
-                                                <>
-                                                    {/* File Import Wrapper */}
-                                                    <label className="btn-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer', padding: '8px 14px', borderRadius: '8px', border: '1px solid var(--border)', fontSize: '13px' }}>
-                                                        <Upload size={14} /> Import GC Stats
-                                                        <input 
-                                                            type="file" 
-                                                            accept=".csv" 
-                                                            onChange={handleFileImport} 
-                                                            style={{ display: 'none' }} 
-                                                        />
-                                                    </label>
-                                                    
-                                                    <button onClick={() => setShowPlayerForm(true)} className="btn-add-player" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '8px', border: 'none', background: 'var(--accent)', color: '#000', fontWeight: '600', fontSize: '13px', cursor: 'pointer' }}>
-                                                        <Plus size={14} /> Add Player
-                                                    </button>
-                                                </>
-                                            )}
-                                        </div>
-
-                                        {/* Row 2: Slick Season/Career Stats Toggle Capsule */}
-                                        <div 
-                                            style={{ 
-                                                display: 'inline-flex', 
-                                                padding: '3px', 
-                                                background: '#13151a', 
-                                                border: '1px solid var(--border)', 
-                                                borderRadius: '20px', 
-                                                position: 'relative',
-                                                cursor: 'pointer',
-                                                userSelect: 'none',
-                                                width: '220px',
-                                                height: '36px'
-                                            }}
-                                        >
-                                            {/* Sliding active indicator */}
-                                            <div 
-                                                style={{ 
-                                                    position: 'absolute',
-                                                    top: '2px',
-                                                    bottom: '2px',
-                                                    left: statsMode === 'season' ? '2px' : '110px',
-                                                    width: '108px',
-                                                    background: 'var(--accent)',
-                                                    borderRadius: '18px',
-                                                    transition: 'left 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
-                                                    zIndex: 1
-                                                }}
-                                            />
-                                            
-                                            {/* Season Stats Selector option */}
-                                            <div 
-                                                onClick={() => setStatsMode('season')}
-                                                style={{ 
-                                                    flex: 1, 
-                                                    textAlign: 'center', 
-                                                    fontSize: '12px', 
-                                                    fontWeight: '600', 
-                                                    color: statsMode === 'season' ? '#000' : 'var(--text-secondary)',
-                                                    zIndex: 2,
-                                                    transition: 'color 0.2s ease',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center'
-                                                }}
-                                            >
-                                                Season Stats
-                                            </div>
-                                            
-                                            {/* Career Stats Selector option */}
-                                            <div 
-                                                onClick={() => setStatsMode('career')}
-                                                style={{ 
-                                                    flex: 1, 
-                                                    textAlign: 'center', 
-                                                    fontSize: '12px', 
-                                                    fontWeight: '600', 
-                                                    color: statsMode === 'career' ? '#000' : 'var(--text-secondary)',
-                                                    zIndex: 2,
-                                                    transition: 'color 0.2s ease',
-                                                    display: 'flex',
-                                                    alignItems: 'center',
-                                                    justifyContent: 'center'
-                                                }}
-                                            >
-                                                Career Stats
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                                <WorkspaceHeader
+                                    activeTeam={activeTeam}
+                                    activeTeamCoaches={activeTeamCoaches}
+                                    userRole={userRole}
+                                    statsMode={statsMode}
+                                    setStatsMode={setStatsMode}
+                                    onFileImport={handleFileImport}
+                                    onAddPlayer={() => setShowPlayerForm(true)}
+                                />
 
                                 {/* Table Navigation Tabs */}
                                 <div className="tabs-container" style={{ borderBottom: '1px solid var(--border)', display: 'flex', gap: '8px', paddingBottom: '1px', flexWrap: 'wrap' }}>

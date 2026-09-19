@@ -5,7 +5,7 @@ import { apiFetch } from '../utils/api';
 interface TeamState {
   teams: Team[];
   players: Player[];
-  playerDirectory: any[];
+  playerDirectory: Player[];
   selectedTeamId: number | null;
   userRole: 'Head Coach' | 'Assistant Coach' | null;
   isLoading: boolean;
@@ -54,10 +54,10 @@ interface TeamState {
   updatePlayer: (
     coachId: number,
     playerId: number,
-    playerData: any
+    playerData: Partial<Player>
   ) => Promise<void>;
   deletePlayer: (coachId: number, playerId: number) => Promise<void>;
-  searchPlayers: (query: string) => Promise<any[]>;
+  searchPlayers: (query: string) => Promise<Player[]>;
   setSelectedTeamId: (teamId: number | null) => void;
   setUserRole: (role: 'Head Coach' | 'Assistant Coach' | null) => void;
 }
