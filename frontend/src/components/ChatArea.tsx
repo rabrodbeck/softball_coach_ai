@@ -25,8 +25,7 @@ export default function ChatArea({ userProfile, selectedTeamId }: ChatAreaProps)
     const [generating, setGenerating] = useState(false);
     const [activeSources, setActiveSources] = useState<number | null>(null);
     const messageEndRef = useRef<HTMLDivElement | null>(null);
-
-
+    const inputRef = useRef<HTMLInputElement | null>(null);
 
     const scrollToBottom = () => {
         messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -35,6 +34,12 @@ export default function ChatArea({ userProfile, selectedTeamId }: ChatAreaProps)
     useEffect(() => {
         scrollToBottom();
     }, [messages, generating]);
+
+    useEffect(() => {
+        if (!generating) {
+            inputRef.current?.focus();
+        }
+    }, [generating]);
 
     // Listen for structural event generated in sidebar
     useEffect(() => {
@@ -184,9 +189,10 @@ export default function ChatArea({ userProfile, selectedTeamId }: ChatAreaProps)
 
     const handleSend = (e: React.FormEvent) => {
         e.preventDefault();
-        if(!input.trim()) return;
+        if (generating || !input.trim()) return;
         const query = input;
         setInput('');
+        inputRef.current?.focus();
         sendPrompt(query);
     };
 
@@ -255,14 +261,14 @@ export default function ChatArea({ userProfile, selectedTeamId }: ChatAreaProps)
           </div>
           <form onSubmit={handleSend} className="chat-input-bar">
             <input
+              ref={inputRef}
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask Coach Winnie a youth fastpitch strategy question..."
               className="chat-input-box"
-              disabled={generating}
             />
-            <button type="submit" className="btn-send" disabled={generating}>
+            <button type="submit" className="btn-send" disabled={generating || !input.trim()}>
               <Send size={18} />
             </button>
           </form>

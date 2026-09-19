@@ -207,7 +207,7 @@ def build_agent_executor(coach_id: int, selected_team_id: int | None = None, sou
                         f"HR={p.get('home_runs', 0)}, RBI={p.get('runs_batted_in', 0)}, "
                         f"R={p.get('runs_scored', 0)}, BB={p.get('walks', 0)}, SO={p.get('strikeouts', 0)}, "
                         f"HBP={p.get('hit_by_pitches', 0)}, ROE={p.get('reached_on_error', 0)}, SB={p.get('stolen_bases', 0)}, CS={p.get('caught_stealing', 0)}, "
-                        f"1B={p.get('singles', 0)}, 2B={p.get('doubles', 0)}, 3B={p.get('triples', 0)}"
+                        f"Singles={p.get('singles', 0)}, Doubles={p.get('doubles', 0)}, Triples={p.get('triples', 0)}"
                     )
                     parts.append(batting)
                 
@@ -266,6 +266,128 @@ def build_agent_executor(coach_id: int, selected_team_id: int | None = None, sou
             return "\n".join(output)
         except Exception as e:
             return f"Error fetching team roster: {str(e)}"
+
+    @tool
+    def get_players_by_position(team_id: int, position: str, scope: str = "season") -> str:
+        """Retrieves all players on a team who are eligible to play a specific softball position (e.g. '3B', 'Catcher', 'Pitcher', 'Shortstop', '1B', '2B', 'LF', 'CF', 'RF', 'Infield', 'Outfield'), along with the innings they have logged at that position.
+        
+        ALWAYS use this tool when the coach asks:
+        - "Who can play [position]?" (e.g. 3B, third base, catcher, pitcher, shortstop, outfield, infield)
+        - "Who can pitch/catch for me tonight?"
+        - "Who are my options at [position]?"
+        - Any question asking for players capable of or eligible for a specific position or position group.
+        
+        Parameters:
+        - team_id: The ID of the team.
+        - position: The position or group name (e.g. '3B', 'Third Base', 'P', 'Pitcher', 'C', 'Catcher', '1B', '2B', 'SS', 'Shortstop', 'LF', 'CF', 'RF', 'Infield', 'Outfield').
+        - scope: 'season' (default) for active season stats, or 'career' for career stats across all teams.
+        """
+        try:
+            my_teams = get_coach_teams(coach_id)
+            matching_team = next((t for t in my_teams if t["id"] == team_id), None)
+            if not matching_team:
+                return f"Error: You do not have permission to view stats for Team ID {team_id}"
+            
+            team_name = matching_team["team_name"]
+            
+            if scope == "career":
+                from src.db.players import get_team_players_career
+                players = get_team_players_career(team_id)
+            else:
+                players = get_team_players(team_id)
+                
+            if not players:
+                return f"The team '{team_name}' has no players in the roster."
+
+            # Normalize position input
+            pos_clean = position.strip().upper()
+            POS_MAP = {
+                "P": ["P"], "PITCHER": ["P"], "PITCHING": ["P"],
+                "C": ["C"], "CATCHER": ["C"], "CATCHING": ["C"],
+                "1B": ["1B"], "FIRST BASE": ["1B"], "FIRST": ["1B"], "1ST BASE": ["1B"], "1ST": ["1B"],
+                "2B": ["2B"], "SECOND BASE": ["2B"], "SECOND": ["2B"], "2ND BASE": ["2B"], "2ND": ["2B"],
+                "3B": ["3B"], "THIRD BASE": ["3B"], "THIRD": ["3B"], "3RD BASE": ["3B"], "3RD": ["3B"],
+                "SS": ["SS"], "SHORTSTOP": ["SS"], "SHORT": ["SS"],
+                "LF": ["LF"], "LEFT FIELD": ["LF"], "LEFT": ["LF"],
+                "CF": ["CF"], "CENTER FIELD": ["CF"], "CENTER": ["CF"],
+                "RF": ["RF"], "RIGHT FIELD": ["RF"], "RIGHT": ["RF"],
+                "INFIELD": ["1B", "2B", "3B", "SS", "C", "P"],
+                "IF": ["1B", "2B", "3B", "SS", "C", "P"],
+                "OUTFIELD": ["LF", "CF", "RF"],
+                "OF": ["LF", "CF", "RF"],
+            }
+            
+            target_positions = POS_MAP.get(pos_clean)
+            if not target_positions:
+                for k, v in POS_MAP.items():
+                    if k in pos_clean:
+                        target_positions = v
+                        break
+            if not target_positions:
+                target_positions = [pos_clean]
+
+            INNINGS_KEYS = {
+                "P": "innings_p",
+                "C": "innings_c",
+                "1B": "innings_1b",
+                "2B": "innings_2b",
+                "3B": "innings_3b",
+                "SS": "innings_ss",
+                "LF": "innings_lf",
+                "CF": "innings_cf",
+                "RF": "innings_rf",
+            }
+
+            eligible_players = []
+            other_experienced_players = []
+
+            for p in players:
+                raw_elig = p.get('eligible_positions') or 'P,C,1B,2B,3B,SS,LF,CF,RF'
+                elig_set = {x.strip().upper() for x in raw_elig.split(',') if x.strip()}
+                
+                # Check eligibility
+                matched_pos = [tp for tp in target_positions if tp in elig_set]
+                
+                # Check innings logged at target positions
+                inn_details = []
+                total_inn = 0.0
+                for tp in target_positions:
+                    key = INNINGS_KEYS.get(tp)
+                    raw_val = p.get(key) if key else 0.0
+                    inn = float(raw_val) if raw_val is not None else 0.0
+                    if inn > 0:
+                        inn_details.append(f"{tp}: {inn:.1f} inn")
+                        total_inn += inn
+
+                inn_summary = f" ({', '.join(inn_details)} logged)" if inn_details else " (0.0 innings logged)"
+                bats = p.get('batting_hand', 'Right')
+                throws = p.get('throwing_hand', 'Right')
+                
+                if matched_pos:
+                    eligible_players.append(
+                        f"- **{p['player_name']}** (Jersey #{p.get('player_number', '?')}, Bats: {bats}, Throws: {throws}) - "
+                        f"Eligible for {', '.join(matched_pos)}{inn_summary}"
+                    )
+                elif total_inn > 0:
+                    other_experienced_players.append(
+                        f"- **{p['player_name']}** (Jersey #{p.get('player_number', '?')}, Bats: {bats}, Throws: {throws}) - "
+                        f"Not currently marked eligible, but has logged {', '.join(inn_details)}"
+                    )
+
+            pos_label = ", ".join(target_positions)
+            output = [f"### Players eligible for {pos_label} on '{team_name}' ({len(eligible_players)} eligible):"]
+            if eligible_players:
+                output.extend(eligible_players)
+            else:
+                output.append(f"No players on '{team_name}' are currently marked as eligible for {pos_label}.")
+
+            if other_experienced_players:
+                output.append("\n**Other players with game experience at this position:**")
+                output.extend(other_experienced_players)
+
+            return "\n".join(output)
+        except Exception as e:
+            return f"Error fetching players by position: {str(e)}"
 
     @tool
     def search_playbook(query: str) -> str:
@@ -330,7 +452,7 @@ def build_agent_executor(coach_id: int, selected_team_id: int | None = None, sou
 
         return "\n\n".join(formatted_docs)
 
-    tools = [list_my_teams, get_team_roster, search_playbook]
+    tools = [list_my_teams, get_team_roster, get_players_by_position, search_playbook]
 
     # Setup LLM, Prompt, and Agent
     llm = ChatOpenAI(
@@ -356,10 +478,9 @@ IMPORTANT STATISTICAL NOTES FOR THE AI AGENT:
    Before answering questions about who has played the most/least or which position has the most/least innings, calculate the total outs for each player/position to make sure you determine the correct minimum/maximum.
 4. Keep these position stats in mind when helping coaches analyze lineup options, position depth, and rotations.
 
-5. POSITION ELIGIBILITY:
-   - The 'EligiblePositions' section lists a comma-separated list of positions a player is eligible to play.
-   - If a user asks "Who can play position X?" or "Who can X for me tonight?" (where X is Pitcher/P, Catcher/C, 1B, 2B, 3B, SS, LF, CF, or RF), scan each player's 'EligiblePositions' and list all players who have X in their eligibility list.
-   - If a user asks "What positions can player Y play?" or "Where is Y eligible?", check player Y's 'EligiblePositions' list and return those positions.
+5. POSITION ELIGIBILITY & ROSTER FILTERING:
+   - When the user asks "Who can play position X?", "Who can X for me tonight?", "Who are my options at X?", or asks about positional depth/eligibility for any position or group (e.g. 3B, Catcher, Pitcher, Shortstop, Infield, Outfield), ALWAYS use the `get_players_by_position` tool. Do NOT attempt to manually scan and filter the full team roster yourself.
+   - If a user asks "What positions can player Y play?" or "Where is Y eligible?", check player Y's 'EligiblePositions' list using `get_team_roster` and return those positions.
 
 6. ACCESS PERMISSIONS & USER ROLES:
    - Pay attention to the active coach's role in the roster output (Head Coach or Assistant Coach).
