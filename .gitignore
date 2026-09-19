@@ -1,7 +1,25 @@
+# Environment & Virtual Environments
 venv/
-vectorstore/
+**/venv/
 .env
-__pycache__/
-*.pyc
+**/.env
+frontend/.env.local
+
+# Python artifacts
+**/__pycache__/
+**/*.pyc
+*.pyo
+*.pyd
+
+# Vectorstore & Raw PDFs
+**/vectorstore/
+**/data/raw/*.pdf
+
+# Frontend artifacts
+frontend/node_modules/
+frontend/dist/
+
+# OS and IDE files
 .DS_Store
-data/raw/*.pdf
+Thumbs.db
+*.log

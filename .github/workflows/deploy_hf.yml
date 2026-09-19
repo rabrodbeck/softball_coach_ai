@@ -1,0 +1,31 @@
+name: Deploy Backend to Hugging Face Space
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy_hf.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Deploy backend subtree to Hugging Face
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Extract backend directory into a temporary branch
+          git subtree split --prefix backend -b hf-deploy
+          
+          # Force push the backend subtree directly to Hugging Face Space main branch
+          git push --force https://rbrodbeck:${HF_TOKEN}@huggingface.co/spaces/rbrodbeck/softball-coach-ai hf-deploy:main
