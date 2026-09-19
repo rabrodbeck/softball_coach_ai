@@ -116,6 +116,10 @@ def format_source_name(source: str) -> str:
         div = filename.replace("practice_plan_", "").replace(".txt", "").upper()
         return f"{div} Practice Plan"
     
+    # League rules
+    if "rules_mrf_lineup" in filename.lower():
+        return "MRF Lineup & Rotation Rules"
+    
     # YouTube video transcripts
     if filename.startswith("yt_"):
         return f"Coaching Video ({filename})"
