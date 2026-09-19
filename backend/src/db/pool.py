@@ -1,4 +1,5 @@
 import os
+from contextlib import contextmanager
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from psycopg2.pool import ThreadedConnectionPool
@@ -33,7 +34,10 @@ class PooledConnectionWrapper:
         self._conn.__enter__()
         return self
     def __exit__(self, exc_type, exc_val, exc_tb):
-        return self._conn.__exit__(exc_type, exc_val, exc_tb)
+        try:
+            return self._conn.__exit__(exc_type, exc_val, exc_tb)
+        finally:
+            self.close()
     def close(self):
         # Intercept close call: put connection back into pool instead of closing socket
         if self._pool and self._conn:
@@ -62,6 +66,23 @@ def get_db_connection():
     
     # Fallback to creating a direct physical connection if the pool fails/exhausts
     return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+
+@contextmanager
+def get_db_cursor(commit: bool = False):
+    """Context manager that automatically manages connection lifecycle and returns connection to pool."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        yield cursor
+        if commit:
+            conn.commit()
+    except Exception:
+        if hasattr(conn, 'rollback'):
+            conn.rollback()
+        raise
+    finally:
+        cursor.close()
+        conn.close()
 
 def init_db():
     """Initializes the database schema for multi-season career statistics."""

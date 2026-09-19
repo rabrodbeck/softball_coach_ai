@@ -6,6 +6,7 @@ interface TeamState {
   teams: Team[];
   players: Player[];
   playerDirectory: Player[];
+  selectedTeam: Team | null;
   selectedTeamId: number | null;
   userRole: 'Head Coach' | 'Assistant Coach' | null;
   isLoading: boolean;
@@ -13,7 +14,8 @@ interface TeamState {
   activeTeamCoaches: { head_coaches: string; assistant_coaches: string } | null;
 
   // Actions
-  fetchTeams: (coachId: number, selectedTeamId: number | null, onSelectTeam: (team: Team) => void) => Promise<void>;
+  fetchTeams: (coachId: number, selectedTeamId?: number | null, onSelectTeam?: (team: Team) => void) => Promise<void>;
+  selectTeam: (team: Team | null) => void;
   fetchPlayers: (teamId: number, scope?: 'season' | 'career') => Promise<void>;
   fetchPlayerDirectory: () => Promise<void>;
   fetchTeamCoaches: (teamId: number) => Promise<void>;
@@ -23,7 +25,7 @@ interface TeamState {
     season: string,
     ageGroup: string,
     inningsPerGame: number,
-    onSelectTeam: (team: Team) => void
+    onSelectTeam?: (team: Team) => void
   ) => Promise<void>;
   updateTeam: (
     coachId: number,
@@ -66,32 +68,45 @@ export const useTeamStore = create<TeamState>((set, get) => ({
   teams: [],
   players: [],
   playerDirectory: [],
+  selectedTeam: null,
   selectedTeamId: null,
   userRole: null,
   isLoading: false,
   error: null,
   activeTeamCoaches: null,
 
+  selectTeam: (team) => {
+    set({
+      selectedTeam: team,
+      selectedTeamId: team ? team.id : null,
+      userRole: (team?.role as 'Head Coach' | 'Assistant Coach') || null,
+    });
+  },
+
   fetchTeams: async (coachId, selectedTeamId, onSelectTeam) => {
     set({ isLoading: true, error: null });
     try {
       const response = await apiFetch(`/api/teams/${coachId}`);
       if (response.ok) {
-        const data = await response.json();
+        const data: Team[] = await response.json();
         set({ teams: data });
 
-        if (selectedTeamId) {
-          const currentSelected = data.find((t: Team) => t.id === selectedTeamId);
-          if (currentSelected) {
-            onSelectTeam(currentSelected);
-            set({ selectedTeamId: currentSelected.id, userRole: currentSelected.role || null });
-          }
-        } else {
-          const defaultActive = data.find((t: Team) => t.is_active);
-          if (defaultActive) {
-            onSelectTeam(defaultActive);
-            set({ selectedTeamId: defaultActive.id, userRole: defaultActive.role || null });
-          }
+        const targetId = selectedTeamId !== undefined ? selectedTeamId : get().selectedTeamId;
+        let chosenTeam: Team | null = null;
+        if (targetId) {
+          chosenTeam = data.find((t: Team) => t.id === targetId) || null;
+        }
+        if (!chosenTeam) {
+          chosenTeam = data.find((t: Team) => t.is_active) || (data.length > 0 ? data[0] : null);
+        }
+
+        if (chosenTeam) {
+          if (onSelectTeam) onSelectTeam(chosenTeam);
+          set({
+            selectedTeam: chosenTeam,
+            selectedTeamId: chosenTeam.id,
+            userRole: (chosenTeam.role as 'Head Coach' | 'Assistant Coach') || null
+          });
         }
       } else {
         set({ error: 'Failed to fetch teams' });
@@ -163,8 +178,8 @@ export const useTeamStore = create<TeamState>((set, get) => ({
       });
       if (response.ok) {
         const newTeam = await response.json();
-        onSelectTeam(newTeam);
-        set({ selectedTeamId: newTeam.id, userRole: 'Head Coach' });
+        if (onSelectTeam) onSelectTeam(newTeam);
+        set({ selectedTeam: newTeam, selectedTeamId: newTeam.id, userRole: 'Head Coach' });
         await get().fetchTeams(coachId, newTeam.id, onSelectTeam);
       } else {
         set({ error: 'Failed to create team' });
@@ -194,11 +209,17 @@ export const useTeamStore = create<TeamState>((set, get) => ({
         })
       });
       if (response.ok) {
-        // Refresh teams
+        // Refresh teams and keep selectedTeam synced
         const teamsResponse = await apiFetch(`/api/teams/${coachId}`);
         if (teamsResponse.ok) {
-          const data = await teamsResponse.json();
-          set({ teams: data });
+          const data: Team[] = await teamsResponse.json();
+          const currentId = get().selectedTeamId;
+          const updatedSelected = data.find((t: Team) => t.id === currentId) || null;
+          set({
+            teams: data,
+            selectedTeam: updatedSelected,
+            userRole: (updatedSelected?.role as 'Head Coach' | 'Assistant Coach') || null
+          });
         }
       } else {
         set({ error: 'Failed to update team' });
@@ -320,6 +341,17 @@ export const useTeamStore = create<TeamState>((set, get) => ({
     return [];
   },
 
-  setSelectedTeamId: (teamId) => set({ selectedTeamId: teamId }),
+  setSelectedTeamId: (teamId) => {
+    if (teamId === null) {
+      set({ selectedTeamId: null, selectedTeam: null, userRole: null });
+      return;
+    }
+    const team = get().teams.find(t => t.id === teamId) || null;
+    set({
+      selectedTeamId: teamId,
+      selectedTeam: team,
+      userRole: (team?.role as 'Head Coach' | 'Assistant Coach') || null,
+    });
+  },
   setUserRole: (role) => set({ userRole: role }),
 }));

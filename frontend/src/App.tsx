@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import AuthPortal from './components/AuthPortal';
 import SideBar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
@@ -8,6 +8,8 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './firebase';
 import { apiFetch } from './utils/api';
 import LineupCreatorModal from './components/LineupCreatorModal';
+import { useTeamStore } from './store/useTeamStore';
+import type { Team } from './components/TeamManager/types';
 
 export interface CoachProfile {
   id: number;
@@ -17,13 +19,6 @@ export interface CoachProfile {
   age_group: string;
 }
 
-interface SelectedTeam {
-  id: number;
-  team_name: string;
-  age_group: string;
-  innings_per_game: number;
-}
-
 function App() {
   const [user, setUser] = useState<CoachProfile | null>(null);
   const [isGuest, setIsGuest] = useState(false);
@@ -31,24 +26,29 @@ function App() {
   const [showTeamManager, setShowTeamManager] = useState(false);
   const [ showLineupCreator, setShowLineupCreator] = useState(false);
   
-  // Selected Team tracked in browser session state
-  const [selectedTeam, setSelectedTeam] = useState<SelectedTeam | null>(null);
+  // Single source of truth for team state via useTeamStore
+  const selectedTeam = useTeamStore(state => state.selectedTeam);
+  const selectTeam = useTeamStore(state => state.selectTeam);
+  const fetchTeams = useTeamStore(state => state.fetchTeams);
 
-  const handleSetUser = (profile: CoachProfile | null) => {
+  const handleSetUser = useCallback((profile: CoachProfile | null) => {
     setUser(profile);
     if (profile) {
       const cached = localStorage.getItem(`selected_team_${profile.id}`);
+      let cachedId: number | null = null;
       if (cached) {
         try {
-          setSelectedTeam(JSON.parse(cached));
+          const parsed = JSON.parse(cached);
+          cachedId = parsed?.id || null;
         } catch (e) {
           console.error("Error parsing selected team cache:", e);
         }
       }
+      fetchTeams(profile.id, cachedId);
     } else {
-      setSelectedTeam(null);
+      selectTeam(null);
     }
-  };
+  }, [fetchTeams, selectTeam]);
 
   // Handle Firebase session persistence auto-login
   useEffect(() => {
@@ -72,7 +72,7 @@ function App() {
       }
     });
     return () => unsubscribe();
-  }, []);
+  }, [handleSetUser]);
 
   const handleLogOut = async () => {
     try {
@@ -84,16 +84,10 @@ function App() {
     setIsGuest(false);
   };
 
-  const handleSelectTeam = (team: { id: number; team_name: string; age_group: string; innings_per_game?: number }) => {
-    const selected = { 
-      id: team.id, 
-      team_name: team.team_name, 
-      age_group: team.age_group, 
-      innings_per_game: team.innings_per_game || 7 
-    };
-    setSelectedTeam(selected);
+  const handleSelectTeam = (team: Team) => {
+    selectTeam(team);
     if (user) {
-      localStorage.setItem(`selected_team_${user.id}`, JSON.stringify(selected));
+      localStorage.setItem(`selected_team_${user.id}`, JSON.stringify(team));
     }
   };
 

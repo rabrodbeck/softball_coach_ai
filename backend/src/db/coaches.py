@@ -1,11 +1,37 @@
 import hashlib
 import re
+import bcrypt
 import psycopg2
 from src.db.pool import get_db_connection
 
-def hash_password(password):
-    """Converts plain-text passwords into a secure SH-256 hash string."""
-    return hashlib.sha256(password.encode()).hexdigest()
+def hash_password(password: str) -> str:
+    """Hashes passwords securely using bcrypt with a random salt."""
+    salt = bcrypt.gensalt()
+    return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
+
+def verify_password(plain_password: str, hashed_password: str) -> tuple[bool, bool]:
+    """
+    Verifies a plain-text password against a hashed password.
+    Returns (is_valid, needs_rehash).
+    Supports bcrypt and legacy SHA-256 for transparent backward compatibility.
+    """
+    if not hashed_password or not plain_password:
+        return False, False
+        
+    # Check for modern bcrypt hash ($2a$, $2b$, or $2y$)
+    if hashed_password.startswith(("$2a$", "$2b$", "$2y$")):
+        try:
+            valid = bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
+            return valid, False
+        except Exception:
+            return False, False
+            
+    # Fallback to legacy unsalted SHA-256 hash
+    legacy_hash = hashlib.sha256(plain_password.encode("utf-8")).hexdigest()
+    if legacy_hash == hashed_password:
+        return True, True  # Valid, but needs upgrade to bcrypt
+        
+    return False, False
 
 def register_coach(username, password, coach_name, location, age_group):
     conn = get_db_connection()
@@ -28,19 +54,43 @@ def register_coach(username, password, coach_name, location, age_group):
         conn.close()
                     
 def authenticate_coach(username, password):
-    """Validates credentials against hashed database entries in Supabase."""
+    """Validates credentials against hashed database entries in Supabase.
+    Transparently upgrades legacy SHA-256 password hashes to salted bcrypt upon successful login.
+    """
     conn = get_db_connection()
     cursor = conn.cursor()
-    pwd_hash = hash_password(password)
-    cursor.execute('''
-        SELECT id, username, coach_name, location, primary_age_group
-        FROM coaches
-        WHERE username = %s AND password_hash = %s
-        ''', (username.lower().strip(), pwd_hash))
-    row = cursor.fetchone()
-    cursor.close()
-    conn.close()
-    if row:
+    try:
+        cursor.execute(
+            """
+            SELECT id, username, password_hash, coach_name, location, primary_age_group
+            FROM coaches
+            WHERE username = %s
+            LIMIT 1;
+            """,
+            (username.lower().strip(),)
+        )
+        row = cursor.fetchone()
+        if not row:
+            return None
+            
+        stored_hash = row["password_hash"]
+        is_valid, needs_rehash = verify_password(password, stored_hash)
+        
+        if not is_valid:
+            return None
+            
+        # Seamlessly upgrade legacy SHA-256 hash to salted bcrypt
+        if needs_rehash:
+            try:
+                new_hash = hash_password(password)
+                cursor.execute(
+                    "UPDATE coaches SET password_hash = %s WHERE id = %s;",
+                    (new_hash, row["id"])
+                )
+                conn.commit()
+            except Exception as rehash_err:
+                print(f"Warning: Failed to upgrade legacy password hash for coach {row['id']}: {rehash_err}")
+
         return {
             "id": row["id"], 
             "username": row["username"],
@@ -48,7 +98,9 @@ def authenticate_coach(username, password):
             "location": row["location"],
             "age_group": row["primary_age_group"]
         }
-    return None
+    finally:
+        cursor.close()
+        conn.close()
 
 def get_coach_by_email(email: str):
     """Retrieves a coach's profile details by their email/username address."""

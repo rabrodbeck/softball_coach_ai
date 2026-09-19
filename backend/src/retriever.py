@@ -411,7 +411,7 @@ def build_agent_executor(coach_id: int, selected_team_id: int | None = None, sou
                 docs_local = vectorstore.similarity_search(
                     division_key, 
                     k=4, 
-                    filter={"source": "data/raw/rules_mrf_2026.pdf"}
+                    filter={"source": {"like": "%rules_mrf%"}}
                 )
             except Exception:
                 pass
@@ -421,8 +421,8 @@ def build_agent_executor(coach_id: int, selected_team_id: int | None = None, sou
         try:
             docs_local_general = vectorstore.similarity_search(
                 query, 
-                k=2, 
-                filter={"source": "data/raw/rules_mrf_2026.pdf"}
+                k=3, 
+                filter={"source": {"like": "%rules_mrf%"}}
             )
         except Exception:
             pass
