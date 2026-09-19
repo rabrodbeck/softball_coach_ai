@@ -1,0 +1,31 @@
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Local SQLite databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Vectorstore & large raw PDF files (cloud database used in production)
+vectorstore/
+data/raw/*.pdf
+
+# Testing & notebooks
+.pytest_cache/
+.coverage
+htmlcov/
+notebooks/
+
+# Git and OS artifacts
+.git/
+.gitignore
+.DS_Store
+Thumbs.db
+*.log

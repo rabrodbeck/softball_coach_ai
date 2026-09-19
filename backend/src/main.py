@@ -598,34 +598,6 @@ def api_add_returning_player(data: AddReturningPlayerRequest, current_coach: dic
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))    
     
-# 6. Google Auth Routes
-@app.post("/api/auth/google-login")
-def api_google_login(data: GoogleLoginRequest):
-    user = get_coach_by_email(data.email)
-    if user:
-        return {
-            "registered": True,
-            "user": user
-        }
-    return {
-        "registered": False,
-        "email": data.email
-    }
-
-@app.post("/api/auth/google-register")
-def api_google_register(data: GoogleRegisterRequest):
-    success = register_coach(
-        username=data.email,
-        password="GOOGLE_AUTH_DUMMY_PASSWORD", # placeholder
-        coach_name=data.coach_name,
-        location=data.location,
-        age_group=data.age_group
-    )
-    if not success:
-        raise HTTPException(status_code=400, detail="Registration failed")
-    
-    return authenticate_coach(data.email, "GOOGLE_AUTH_DUMMY_PASSWORD")
-
 @app.get("/")
 def read_root():
     return {"status": "ok", "app": "Softball Coach AI API"}
