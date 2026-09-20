@@ -144,15 +144,13 @@ def save_team_lineup(team_id: int, coach_id: int, game_date: str, opponent: str,
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
+        json_data = json.dumps(lineup_data)
         # Check if game lineup already exists to overwrite it
         cursor.execute(
             "SELECT id FROM lineups WHERE team_id = %s AND game_date = %s AND opponent = %s LIMIT 1;",
             (team_id, game_date, opponent)
         )
         existing = cursor.fetchone()
-
-        import json
-        json_data = json.dumps(lineup_data)
 
         if existing:
             cursor.execute(
@@ -164,8 +162,12 @@ def save_team_lineup(team_id: int, coach_id: int, game_date: str, opponent: str,
                 "INSERT INTO lineups (team_id, created_by_coach_id, game_date, opponent, innings_count, lineup_data) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id;",
                 (team_id, coach_id, game_date, opponent, innings_count, json_data)
             )
+        row = cursor.fetchone()
         conn.commit()
-        return cursor.fetchone()["id"]
+        return row["id"] if row else None
+    except Exception as e:
+        conn.rollback()
+        raise e
     finally:
         cursor.close()
         conn.close()
@@ -194,6 +196,9 @@ def delete_team_lineup(lineup_id: int):
         cursor.execute("DELETE FROM lineups WHERE id = %s;", (lineup_id,))
         conn.commit()
         return True
+    except Exception as e:
+        conn.rollback()
+        raise e
     finally:
         cursor.close()
         conn.close()

@@ -157,6 +157,7 @@ def init_db():
         );
     """)
     cursor.execute("ALTER TABLE lineups ENABLE ROW LEVEL SECURITY;")
+    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_lineups_team_game_opponent ON lineups (team_id, game_date, opponent);")
 
     conn.commit()
     cursor.close()
