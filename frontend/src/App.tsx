@@ -55,8 +55,12 @@ function App() {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser && firebaseUser.email) {
         try {
+          const token = await firebaseUser.getIdToken();
           const res = await apiFetch(`/api/auth/google-login`, {
             method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`
+            },
             body: JSON.stringify({
               email: firebaseUser.email,
               display_name: firebaseUser.displayName || ""

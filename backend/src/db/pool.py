@@ -98,9 +98,17 @@ def init_db():
             password_hash TEXT NOT NULL,
             coach_name TEXT NOT NULL,
             location TEXT NOT NULL,
-            primary_age_group TEXT NOT NULL
+            primary_age_group TEXT NOT NULL,
+            auth_provider VARCHAR(50) DEFAULT 'email'
         );
     ''')
+    cursor.execute("ALTER TABLE coaches ADD COLUMN IF NOT EXISTS auth_provider VARCHAR(50) DEFAULT 'email';")
+    # Invalidate legacy dummy passwords for Google OAuth accounts (SHA-256 of GOOGLE_AUTH_DUMMY_PASSWORD)
+    cursor.execute("""
+        UPDATE coaches
+        SET auth_provider = 'google', password_hash = '!google_oauth_migrated'
+        WHERE password_hash = '2ffdb2d8ae6139f61758fde720f6dec9b7823e0f14ff2f3c87d7b4ed26a377a5';
+    """)
     
     # 2. Create players_teams join table
     cursor.execute('''

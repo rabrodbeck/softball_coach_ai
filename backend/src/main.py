@@ -4,7 +4,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, EmailStr, field_validator
 from src.retriever import build_chain, build_agent_executor, format_source_name
 from src.database import get_coach_by_email, authenticate_coach, register_coach, create_team, get_coach_teams, set_active_team, update_team, add_player, get_team_players, update_player_stats, delete_player, bulk_update_player_stats, check_is_head_coach, add_coach_to_team, get_db_connection, update_player_eligibility, save_team_lineup, get_team_lineups, delete_team_lineup, add_returning_player, get_coach_players_directory, get_team_coaches, search_players_global
-from src.auth import get_current_coach, verify_team_ownership
+from src.auth import get_current_coach, verify_team_ownership, verify_firebase_token, check_team_ownership
 from langchain_core.messages import HumanMessage, AIMessage
 import json
 from sse_starlette import EventSourceResponse
@@ -272,8 +272,11 @@ def api_login(data: LoginRequest):
     return user
 
 @app.post("/api/auth/google-login")
-def api_google_login(data: GoogleLoginRequest):
-    user = get_coach_by_email(data.email)
+async def api_google_login(data: GoogleLoginRequest | None = None, token_claims: dict = Depends(verify_firebase_token)):
+    email = token_claims.get("email")
+    if not email:
+        raise HTTPException(status_code=401, detail="Auth token missing email address")
+    user = get_coach_by_email(email)
     if user:
         return {
             "registered": True,
@@ -281,22 +284,28 @@ def api_google_login(data: GoogleLoginRequest):
         }
     return {
         "registered": False,
-        "email": data.email
+        "email": email
     }
 
 @app.post("/api/auth/google-register")
-def api_google_register(data: GoogleRegisterRequest):
+async def api_google_register(data: GoogleRegisterRequest, token_claims: dict = Depends(verify_firebase_token)):
+    token_email = token_claims.get("email")
+    if not token_email:
+        raise HTTPException(status_code=401, detail="Auth token missing email address")
+
+    # Enforce that the registered email strictly matches the verified Firebase token
+    email = token_email.lower().strip()
     success = register_coach(
-        username=data.email,
-        password="GOOGLE_AUTH_DUMMY_PASSWORD",
+        username=email,
         coach_name=data.coach_name,
         location=data.location,
-        age_group=data.age_group
+        age_group=data.age_group,
+        auth_provider="google"
     )
     if not success:
         raise HTTPException(status_code=400, detail="Google registration failed")
     
-    return get_coach_by_email(data.email)
+    return get_coach_by_email(email)
 
 # 3. AI RAG Chat Route (Streaming response)
 _chain = None
@@ -316,7 +325,7 @@ async def api_chat(data: ChatRequest, current_coach: dict = Depends(get_current_
 
     # Enforce selected team authorization if provided
     if data.selected_team_id:
-        verify_team_ownership(data.selected_team_id, current_coach)
+        check_team_ownership(data.selected_team_id, current_coach["id"])
 
     profile_context = (
         f"Directly advising Coach {data.coach_name} based in {data.location}. "
@@ -500,7 +509,7 @@ def api_add_player(data: PlayerRequest, current_coach: dict = Depends(get_curren
     if data.coach_id != current_coach["id"]:
         raise HTTPException(status_code=403, detail="Unauthorized coach ID.")
     # Verify the coach is associated with the target team
-    verify_team_ownership(data.team_id, current_coach)
+    check_team_ownership(data.team_id, current_coach["id"])
     try:
         new_player = add_player(current_coach["id"], data.team_id, data.player_name, data.player_number, data.batting_hand, data.throwing_hand, data.parent_player_id)
         if not new_player:
@@ -547,7 +556,7 @@ def api_update_player(player_id: int, data: PlayerUpdateRequest, current_coach: 
         raise HTTPException(status_code=403, detail="Unauthorized coach ID.")
     
     # Verify coach ownership of the target team submitted in request
-    verify_team_ownership(data.team_id, current_coach)
+    check_team_ownership(data.team_id, current_coach["id"])
     
     try:
         updated = update_player_stats(current_coach["id"], player_id, dict(data))
@@ -564,7 +573,7 @@ def api_delete_player(player_id: int, coach_id: int, team_id: int, current_coach
     if coach_id != current_coach["id"]:
         raise HTTPException(status_code=403, detail="Unauthorized coach ID.")
         
-    verify_team_ownership(team_id, current_coach)
+    check_team_ownership(team_id, current_coach["id"])
     try:
         success = delete_player(current_coach["id"], player_id, team_id)
         if not success:
@@ -579,7 +588,7 @@ def api_delete_player(player_id: int, coach_id: int, team_id: int, current_coach
 def api_bulk_update_players(data: BulkImportRequest, current_coach: dict = Depends(get_current_coach)):
     if data.coach_id != current_coach["id"]:
         raise HTTPException(status_code=403, detail="Unauthorized coach ID.")
-    verify_team_ownership(data.team_id, current_coach)
+    check_team_ownership(data.team_id, current_coach["id"])
     try:
         player_data = [dict(p) for p in data.players]
         updated = bulk_update_player_stats(current_coach["id"], data.team_id, player_data)
@@ -594,7 +603,7 @@ def api_add_returning_player(data: AddReturningPlayerRequest, current_coach: dic
     """Links an existing career player to a new team roster."""
     if data.coach_id != current_coach["id"]:
         raise HTTPException(status_code=403, detail="Unauthorized coach ID.")
-    verify_team_ownership(data.team_id, current_coach)
+    check_team_ownership(data.team_id, current_coach["id"])
     try:
         result = add_returning_player(current_coach["id"], data.team_id, data.player_id, data.player_number)
         if not result:
@@ -611,20 +620,27 @@ def read_root():
 
 @app.put("/api/players/{player_id}/eligibility")
 def api_update_eligibility(player_id: int, data: UpdateEligibilityRequest, current_coach: dict = Depends(get_current_coach)):
-    # Verify player's team ownership
+    # Verify player exists and coach has access rights to one of player's teams
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT team_id FROM players WHERE id = %s LIMIT 1;", (player_id, ))
+        cursor.execute("""
+            SELECT pt.team_id 
+            FROM players_teams pt
+            JOIN team_coaches tc ON pt.team_id = tc.team_id
+            WHERE pt.player_id = %s AND tc.coach_id = %s
+            LIMIT 1;
+        """, (player_id, current_coach["id"]))
         row = cursor.fetchone()
         if not row:
-            raise HTTPException(status_code=404, detail="Player not found.")
-        team_id = row["team_id"]
+            cursor.execute("SELECT id FROM players WHERE id = %s LIMIT 1;", (player_id,))
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail="Player not found.")
+            raise HTTPException(status_code=403, detail="You do not have access rights for this player's team.")
     finally:
         cursor.close()
         conn.close()
 
-    verify_team_ownership(team_id, current_coach)
     success = update_player_eligibility(player_id, data.eligible_positions)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to update eligibility.")
@@ -657,6 +673,6 @@ def api_delete_lineup(lineup_id: int, current_coach: dict = Depends(get_current_
         cursor.close()
         conn.close()
         
-    verify_team_ownership(team_id, current_coach)
+    check_team_ownership(team_id, current_coach["id"])
     delete_team_lineup(lineup_id)
     return {"success": True}

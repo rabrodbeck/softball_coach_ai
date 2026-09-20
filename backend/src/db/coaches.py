@@ -1,5 +1,6 @@
 import hashlib
 import re
+import secrets
 import bcrypt
 import psycopg2
 from src.db.pool import get_db_connection
@@ -33,17 +34,21 @@ def verify_password(plain_password: str, hashed_password: str) -> tuple[bool, bo
         
     return False, False
 
-def register_coach(username, password, coach_name, location, age_group):
+def register_coach(username, password=None, coach_name="", location="", age_group="", auth_provider="email"):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        pwd_hash = hash_password(password)
+        if auth_provider == "google":
+            pwd_hash = f"!google_oauth_{secrets.token_hex(32)}"
+        else:
+            pwd_hash = hash_password(password) if password else f"!disabled_{secrets.token_hex(32)}"
+
         cursor.execute(
             """
-            INSERT INTO coaches (username, password_hash, coach_name, location, primary_age_group)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO coaches (username, password_hash, coach_name, location, primary_age_group, auth_provider)
+            VALUES (%s, %s, %s, %s, %s, %s)
             """,
-            (username.lower().strip(), pwd_hash, coach_name.strip(), location.strip(), age_group)
+            (username.lower().strip(), pwd_hash, coach_name.strip(), location.strip(), age_group, auth_provider)
         )
         conn.commit()
         return True
@@ -56,13 +61,17 @@ def register_coach(username, password, coach_name, location, age_group):
 def authenticate_coach(username, password):
     """Validates credentials against hashed database entries in Supabase.
     Transparently upgrades legacy SHA-256 password hashes to salted bcrypt upon successful login.
+    Strictly prohibits login via dummy passwords or for Google OAuth registered accounts.
     """
+    if not username or not password or password == "GOOGLE_AUTH_DUMMY_PASSWORD":
+        return None
+
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
         cursor.execute(
             """
-            SELECT id, username, password_hash, coach_name, location, primary_age_group
+            SELECT id, username, password_hash, coach_name, location, primary_age_group, auth_provider
             FROM coaches
             WHERE username = %s
             LIMIT 1;
@@ -74,6 +83,11 @@ def authenticate_coach(username, password):
             return None
             
         stored_hash = row["password_hash"]
+
+        # Block password login if registered via Google OAuth or stored password is an OAuth/disabled marker
+        if row.get("auth_provider") == "google" or stored_hash.startswith(("!google_oauth", "!disabled")):
+            return None
+
         is_valid, needs_rehash = verify_password(password, stored_hash)
         
         if not is_valid:
@@ -109,7 +123,7 @@ def get_coach_by_email(email: str):
     try:
         cursor.execute(
             """
-            SELECT id, username, coach_name, location, primary_age_group
+            SELECT id, username, coach_name, location, primary_age_group, auth_provider
             FROM coaches
             WHERE username = %s
             """,

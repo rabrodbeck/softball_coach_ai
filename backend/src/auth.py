@@ -86,18 +86,26 @@ async def get_current_coach(token_payload: dict = Depends(verify_firebase_token)
         raise HTTPException(status_code=404, detail="Coach profile not registered in database")
     return coach
 
-async def verify_team_ownership(team_id: int, current_coach: dict = Depends(get_current_coach)):
-    """FastAPI Dependency: Raises a 403 error if the authenticated coach is not associate with this team."""
+def check_team_ownership(team_id: int, coach_id: int) -> str:
+    """Synchronous helper: Raises a 403 error if the coach is not associated with this team."""
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT role FROM team_coaches WHERE team_id = %s AND coach_id = %s LIMIT 1;",
-                       (team_id, current_coach["id"])
-                       )
+        cursor.execute(
+            "SELECT role FROM team_coaches WHERE team_id = %s AND coach_id = %s LIMIT 1;",
+            (team_id, coach_id)
+        )
         row = cursor.fetchone()
         if not row:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access rights for this team.")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access rights for this team."
+            )
         return row["role"]
     finally:
         cursor.close()
         conn.close()
+
+async def verify_team_ownership(team_id: int, current_coach: dict = Depends(get_current_coach)) -> str:
+    """FastAPI Dependency: Raises a 403 error if the authenticated coach is not associated with this team."""
+    return check_team_ownership(team_id, current_coach["id"])

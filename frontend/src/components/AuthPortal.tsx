@@ -42,9 +42,13 @@ export default function AuthPortal({ onLoginSuccess, onContinueAsGuest }: AuthPo
                 throw new Error("Could not retrieve email from Google Account.");
             }
 
-            // Call backend check endpoint
+            // Call backend check endpoint with verified token
+            const token = await result.user.getIdToken();
             const response = await apiFetch(`/api/auth/google-login`, {
                 method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`
+                },
                 body: JSON.stringify({ email: userEmail, display_name: userDisplayName }),
             });
 
@@ -80,8 +84,10 @@ export default function AuthPortal({ onLoginSuccess, onContinueAsGuest }: AuthPo
         setLoading(true);
 
         try {
+            const token = auth.currentUser ? await auth.currentUser.getIdToken() : "";
             const response = await apiFetch(`/api/auth/google-register`, {
                 method: "POST",
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
                 body: JSON.stringify({
                     email,
                     coach_name: coachName,
@@ -145,9 +151,13 @@ export default function AuthPortal({ onLoginSuccess, onContinueAsGuest }: AuthPo
                 throw new Error("Failed to resolve authenticated session.");
             }
 
-            // 3. Query the backend for the coach profile using their email
+            // 3. Query the backend for the coach profile using their verified session
+            const token = await firebaseUser.getIdToken();
             const response = await apiFetch(`/api/auth/google-login`, {
                 method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`
+                },
                 body: JSON.stringify({
                     email: firebaseUser.email,
                     display_name: firebaseUser.displayName || 'Coach'
@@ -212,9 +222,11 @@ export default function AuthPortal({ onLoginSuccess, onContinueAsGuest }: AuthPo
 
             setSuccess("Account created successfully! Logging in...");
             
-            // 3. Resolve the new profile in our local session state
+            // 3. Resolve the new profile in our local session state with verified token
+            const token = auth.currentUser ? await auth.currentUser.getIdToken() : "";
             const profileRes = await apiFetch(`/api/auth/google-login`, {
                 method: 'POST',
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
                 body: JSON.stringify({
                     email,
                     display_name: coachName
