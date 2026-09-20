@@ -1,4 +1,5 @@
 import psycopg2
+import psycopg2.extras
 from src.db.pool import get_db_connection
 from src.db.metrics import calculate_derived_stats, add_fractional_innings
 from src.db.coaches import check_is_head_coach
@@ -432,63 +433,103 @@ def delete_player(coach_id: int, player_id: int, team_id: int):
 
 
 def bulk_update_player_stats(coach_id: int, team_id: int, updates: list):
-    """Updates multiple players stats inside the team-split players structure."""
+    """Updates multiple players stats inside the team-split players structure using batch execution."""
     if not check_is_head_coach(coach_id, team_id):
         raise PermissionError("Only a Head Coach can import bulk stats.")
     
     conn = get_db_connection()
-    cursor = conn.conn.cursor() if hasattr(conn, 'conn') else conn.cursor()
+    cursor = conn.cursor()
     try:
         cursor.execute("SELECT innings_per_game FROM teams WHERE id = %s;", (team_id,))
         team_row = cursor.fetchone()
         innings_per_game = team_row["innings_per_game"] if team_row else 7
 
-        updated_players = []
+        # 1. Pre-fetch entire team roster in one single query to eliminate per-player lookups
+        cursor.execute(
+            """
+            SELECT p.id, pt.player_number, LOWER(p.player_name) as name_lower, pt.games_played
+            FROM players p
+            JOIN players_teams pt ON p.id = pt.player_id
+            WHERE pt.team_id = %s;
+            """,
+            (team_id,)
+        )
+        roster_rows = cursor.fetchall()
+        by_number = {r["player_number"]: r for r in roster_rows if r["player_number"] is not None}
+        by_name = {r["name_lower"]: r for r in roster_rows}
+
+        pt_batch = []
+        off_batch = []
+        pit_batch = []
+        def_batch = []
+        cat_batch = []
+
         for p in updates:
             number = p.get("player_number")
-            name = p.get("player_name", "").strip()
-            
-            # Find player ID using join table
-            if number >= 0:
-                cursor.execute(
-                    """
-                    SELECT p.id, pt.games_played 
-                    FROM players p 
-                    JOIN players_teams pt ON p.id = pt.player_id 
-                    WHERE pt.team_id = %s AND pt.player_number = %s LIMIT 1;
-                    """,
-                    (team_id, number)
-                )
-            else:
-                cursor.execute(
-                    """
-                    SELECT p.id, pt.games_played 
-                    FROM players p 
-                    JOIN players_teams pt ON p.id = pt.player_id 
-                    WHERE pt.team_id = %s AND LOWER(p.player_name) = LOWER(%s) LIMIT 1;
-                    """,
-                    (team_id, name)
-                )
-            row = cursor.fetchone()
-            if not row:
+            name = p.get("player_name", "").strip().lower()
+
+            match = None
+            if number is not None and number >= 0 and number in by_number:
+                match = by_number[number]
+            elif name in by_name:
+                match = by_name[name]
+
+            if not match:
                 continue
-                
-            player_id = row["id"]
-            games_played = p.get("games_played", row["games_played"])
 
-            # Update seasonal games played
-            cursor.execute(
-                "UPDATE players_teams SET games_played = %s WHERE player_id = %s AND team_id = %s RETURNING *;",
-                (games_played, player_id, team_id)
+            player_id = match["id"]
+            games_played = p.get("games_played", match["games_played"])
+
+            pt_batch.append((games_played, player_id, team_id))
+
+            off_batch.append((
+                player_id, team_id, p["plate_appearances"], p["at_bats"],
+                p["singles"], p["doubles"], p["triples"], p["home_runs"],
+                p["walks"], p["strikeouts"], p["hit_by_pitches"],
+                p["stolen_bases"], p["caught_stealing"],
+                p["runs_scored"], p["runs_batted_in"], p.get("reached_on_error", 0)
+            ))
+
+            if p.get("games_pitched", 0) > 0:
+                pit_batch.append((
+                    player_id, team_id, p["games_pitched"], p["games_started"],
+                    p["innings_pitched"], p["batters_faced"], p["number_of_pitches"],
+                    p["hits_allowed"], p["runs_allowed"], p["earned_runs"], p["walks_allowed"], p["strikeouts_thrown"],
+                    p["hit_by_pitches_allowed"], p["left_on_base"]
+                ))
+
+            new_inn_p = float(p.get("innings_p") or 0.0)
+            new_inn_c = float(p.get("innings_c") or 0.0)
+            new_inn_1b = float(p.get("innings_1b") or 0.0)
+            new_inn_2b = float(p.get("innings_2b") or 0.0)
+            new_inn_3b = float(p.get("innings_3b") or 0.0)
+            new_inn_ss = float(p.get("innings_ss") or 0.0)
+            new_inn_lf = float(p.get("innings_lf") or 0.0)
+            new_inn_cf = float(p.get("innings_cf") or 0.0)
+            new_inn_rf = float(p.get("innings_rf") or 0.0)
+
+            def_batch.append((
+                player_id, team_id, p.get("total_chances", 0), p.get("assists", 0), p.get("putouts", 0), p.get("errors", 0),
+                new_inn_p, new_inn_c, new_inn_1b, new_inn_2b, new_inn_3b, new_inn_ss, new_inn_lf, new_inn_cf, new_inn_rf
+            ))
+
+            cat_batch.append((
+                player_id, team_id, p.get("innings_caught", 0.0), p.get("passed_balls_allowed", 0),
+                p.get("runners_stolen_bases", 0), p.get("runners_caught_stealing", 0)
+            ))
+
+        # 2. Execute batch updates
+        if pt_batch:
+            psycopg2.extras.execute_batch(
+                cursor,
+                "UPDATE players_teams SET games_played = %s WHERE player_id = %s AND team_id = %s;",
+                pt_batch,
+                page_size=100
             )
-            pt_row = cursor.fetchone()
-            
-            # Fetch core player row
-            cursor.execute("SELECT * FROM players WHERE id = %s;", (player_id,))
-            player_row = cursor.fetchone()
 
-            # Update offensive stats
-            cursor.execute(
+        if off_batch:
+            psycopg2.extras.execute_batch(
+                cursor,
                 """
                 INSERT INTO offensive_stats (
                     player_id, team_id, plate_appearances, at_bats,
@@ -503,68 +544,37 @@ def bulk_update_player_stats(coach_id: int, team_id: int, updates: list):
                     walks = EXCLUDED.walks, strikeouts = EXCLUDED.strikeouts, hit_by_pitches = EXCLUDED.hit_by_pitches,
                     stolen_bases = EXCLUDED.stolen_bases, caught_stealing = EXCLUDED.caught_stealing,
                     runs_scored = EXCLUDED.runs_scored, runs_batted_in = EXCLUDED.runs_batted_in,
-                    reached_on_error = EXCLUDED.reached_on_error, updated_at = CURRENT_TIMESTAMP
-                RETURNING *;
+                    reached_on_error = EXCLUDED.reached_on_error, updated_at = CURRENT_TIMESTAMP;
                 """,
-                (
-                    player_id, team_id, p["plate_appearances"], p["at_bats"],
-                    p["singles"], p["doubles"], p["triples"], p["home_runs"],
-                    p["walks"], p["strikeouts"], p["hit_by_pitches"],
-                    p["stolen_bases"], p["caught_stealing"],
-                    p["runs_scored"], p["runs_batted_in"], p.get("reached_on_error", 0)
-                )
+                off_batch,
+                page_size=100
             )
-            stats_row = cursor.fetchone()
 
-            # Update pitching stats table
-            if p.get("games_pitched", 0) > 0:
-                cursor.execute(
-                    """
-                    INSERT INTO pitching_stats (
-                        player_id, team_id, games_pitched, games_started,
-                        innings_pitched, batters_faced, number_of_pitches,
-                        hits, runs, earned_runs, walks, strikeouts,
-                        hit_by_pitches, left_on_base, updated_at
-                    )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-                    ON CONFLICT (player_id, team_id) DO UPDATE
-                    SET games_pitched = EXCLUDED.games_pitched, games_started = EXCLUDED.games_started,
-                        innings_pitched = EXCLUDED.innings_pitched, batters_faced = EXCLUDED.batters_faced,
-                        number_of_pitches = EXCLUDED.number_of_pitches, hits = EXCLUDED.hits, runs = EXCLUDED.runs,
-                        earned_runs = EXCLUDED.earned_runs, walks = EXCLUDED.walks, strikeouts = EXCLUDED.strikeouts,
-                        hit_by_pitches = EXCLUDED.hit_by_pitches, left_on_base = EXCLUDED.left_on_base, updated_at = CURRENT_TIMESTAMP
-                    RETURNING *;
-                    """,
-                    (
-                        player_id, team_id, p["games_pitched"], p["games_started"],
-                        p["innings_pitched"], p["batters_faced"], p["number_of_pitches"],
-                        p["hits_allowed"], p["runs_allowed"], p["earned_runs"], p["walks_allowed"], p["strikeouts_thrown"],
-                        p["hit_by_pitches_allowed"], p["left_on_base"]
-                    )
+        if pit_batch:
+            psycopg2.extras.execute_batch(
+                cursor,
+                """
+                INSERT INTO pitching_stats (
+                    player_id, team_id, games_pitched, games_started,
+                    innings_pitched, batters_faced, number_of_pitches,
+                    hits, runs, earned_runs, walks, strikeouts,
+                    hit_by_pitches, left_on_base, updated_at
                 )
-                pit_row = cursor.fetchone()
-            else:
-                cursor.execute("SELECT * FROM pitching_stats WHERE player_id = %s AND team_id = %s LIMIT 1;", (player_id, team_id))
-                pit_row = cursor.fetchone()
-                if not pit_row:
-                    pit_row = {
-                        "games_pitched": 0, "games_started": 0, "innings_pitched": 0.0, "batters_faced": 0,
-                        "number_of_pitches": 0, "hits": 0, "runs": 0, "earned_runs": 0, "walks": 0,
-                        "strikeouts": 0, "hit_by_pitches": 0, "left_on_base": 0
-                    }
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (player_id, team_id) DO UPDATE
+                SET games_pitched = EXCLUDED.games_pitched, games_started = EXCLUDED.games_started,
+                    innings_pitched = EXCLUDED.innings_pitched, batters_faced = EXCLUDED.batters_faced,
+                    number_of_pitches = EXCLUDED.number_of_pitches, hits = EXCLUDED.hits, runs = EXCLUDED.runs,
+                    earned_runs = EXCLUDED.earned_runs, walks = EXCLUDED.walks, strikeouts = EXCLUDED.strikeouts,
+                    hit_by_pitches = EXCLUDED.hit_by_pitches, left_on_base = EXCLUDED.left_on_base, updated_at = CURRENT_TIMESTAMP;
+                """,
+                pit_batch,
+                page_size=100
+            )
 
-            # Update defensive stats
-            new_inn_p = float(p.get("innings_p") or 0.0)
-            new_inn_c = float(p.get("innings_c") or 0.0)
-            new_inn_1b = float(p.get("innings_1b") or 0.0)
-            new_inn_2b = float(p.get("innings_2b") or 0.0)
-            new_inn_3b = float(p.get("innings_3b") or 0.0)
-            new_inn_ss = float(p.get("innings_ss") or 0.0)
-            new_inn_lf = float(p.get("innings_lf") or 0.0)
-            new_inn_cf = float(p.get("innings_cf") or 0.0)
-            new_inn_rf = float(p.get("innings_rf") or 0.0)
-
-            cursor.execute(
+        if def_batch:
+            psycopg2.extras.execute_batch(
+                cursor,
                 """
                 INSERT INTO defensive_stats (
                     player_id, team_id, total_chances, assists, putouts, errors,
@@ -578,18 +588,15 @@ def bulk_update_player_stats(coach_id: int, team_id: int, updates: list):
                     innings_1b = EXCLUDED.innings_1b, innings_2b = EXCLUDED.innings_2b,
                     innings_3b = EXCLUDED.innings_3b, innings_ss = EXCLUDED.innings_ss,
                     innings_lf = EXCLUDED.innings_lf, innings_cf = EXCLUDED.innings_cf,
-                    innings_rf = EXCLUDED.innings_rf, updated_at = CURRENT_TIMESTAMP
-                RETURNING *;
+                    innings_rf = EXCLUDED.innings_rf, updated_at = CURRENT_TIMESTAMP;
                 """,
-                (
-                    player_id, team_id, p.get("total_chances", 0), p.get("assists", 0), p.get("putouts", 0), p.get("errors", 0),
-                    new_inn_p, new_inn_c, new_inn_1b, new_inn_2b, new_inn_3b, new_inn_ss, new_inn_lf, new_inn_cf, new_inn_rf
-                )
+                def_batch,
+                page_size=100
             )
-            def_row = cursor.fetchone()
 
-            # Update catching stats
-            cursor.execute(
+        if cat_batch:
+            psycopg2.extras.execute_batch(
+                cursor,
                 """
                 INSERT INTO catching_stats (
                     player_id, team_id, innings_caught, passed_balls_allowed, runners_stolen_bases, runners_caught_stealing, updated_at
@@ -598,56 +605,15 @@ def bulk_update_player_stats(coach_id: int, team_id: int, updates: list):
                 ON CONFLICT (player_id, team_id) DO UPDATE
                 SET innings_caught = EXCLUDED.innings_caught, passed_balls_allowed = EXCLUDED.passed_balls_allowed,
                     runners_stolen_bases = EXCLUDED.runners_stolen_bases, runners_caught_stealing = EXCLUDED.runners_caught_stealing,
-                    updated_at = CURRENT_TIMESTAMP
-                RETURNING *;
+                    updated_at = CURRENT_TIMESTAMP;
                 """,
-                (
-                    player_id, team_id, p.get("innings_caught", 0.0), p.get("passed_balls_allowed", 0),
-                    p.get("runners_stolen_bases", 0), p.get("runners_caught_stealing", 0)
-                )
+                cat_batch,
+                page_size=100
             )
-            cat_row = cursor.fetchone()
 
-            if player_row and stats_row and pit_row and def_row and cat_row:
-                full_player = {
-                    **dict(stats_row),
-                    "games_pitched": pit_row["games_pitched"],
-                    "games_started": pit_row["games_started"],
-                    "innings_pitched": float(pit_row["innings_pitched"]),
-                    "batters_faced": pit_row["batters_faced"],
-                    "number_of_pitches": pit_row["number_of_pitches"],
-                    "hits_allowed": pit_row["hits"],
-                    "runs_allowed": pit_row["runs"],
-                    "earned_runs": pit_row["earned_runs"],
-                    "walks_allowed": pit_row["walks"],
-                    "strikeouts_thrown": pit_row["strikeouts"],
-                    "hit_by_pitches_allowed": pit_row["hit_by_pitches"],
-                    "left_on_base": pit_row["left_on_base"],
-                    "total_chances": def_row["total_chances"],
-                    "assists": def_row["assists"],
-                    "putouts": def_row["putouts"],
-                    "errors": def_row["errors"],
-                    "innings_p": float(def_row["innings_p"] or 0.0),
-                    "innings_c": float(def_row["innings_c"] or 0.0),
-                    "innings_1b": float(def_row["innings_1b"] or 0.0),
-                    "innings_2b": float(def_row["innings_2b"] or 0.0),
-                    "innings_3b": float(def_row["innings_3b"] or 0.0),
-                    "innings_ss": float(def_row["innings_ss"] or 0.0),
-                    "innings_lf": float(def_row["innings_lf"] or 0.0),
-                    "innings_cf": float(def_row["innings_cf"] or 0.0),
-                    "innings_rf": float(def_row["innings_rf"] or 0.0),
-                    "innings_caught": float(cat_row["innings_caught"]),
-                    "passed_balls_allowed": cat_row["passed_balls_allowed"],
-                    "runners_stolen_bases": cat_row["runners_stolen_bases"],
-                    "runners_caught_stealing": cat_row["runners_caught_stealing"],
-                    "innings_per_game": innings_per_game,
-                    **dict(player_row),
-                    "player_number": pt_row["player_number"]
-                }
-                updated_players.append(calculate_derived_stats(full_player))
-                
         conn.commit()
-        return updated_players
+        # 3. Fetch and return complete updated roster in a single join query
+        return get_team_players(team_id)
     except Exception as e:
         conn.rollback()
         raise e

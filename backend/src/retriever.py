@@ -523,7 +523,15 @@ def build_agent_executor(coach_id: int, selected_team_id: int | None = None, sou
     ])
 
     agent = create_tool_calling_agent(llm, tools, prompt)
-    return AgentExecutor(agent=agent, tools=tools, verbose=False, return_intermediate_steps=True)
+    return AgentExecutor(
+        agent=agent,
+        tools=tools,
+        verbose=False,
+        return_intermediate_steps=True,
+        max_iterations=5,
+        max_execution_time=25.0,
+        early_stopping_method="generate"
+    )
 
 if __name__ == "__main__":
     print("Building RAG chain...")
