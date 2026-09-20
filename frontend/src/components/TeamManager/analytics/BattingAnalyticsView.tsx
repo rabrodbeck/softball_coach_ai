@@ -32,7 +32,7 @@ export function BattingAnalyticsView({
     onSelectBatter: (id: number) => void;
 }) {
     // Filter out players who have no plate appearances to focus purely on active batters
-    const batters: BattingStats[] = players.filter(p => p.plate_appearances > 0);
+    const batters: BattingStats[] = React.useMemo(() => players.filter(p => p.plate_appearances > 0), [players]);
     const [hoveredBatterId, setHoveredBatterId] = React.useState<number | null>(null);
 
     React.useEffect(() => {

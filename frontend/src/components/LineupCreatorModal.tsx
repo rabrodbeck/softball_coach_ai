@@ -240,6 +240,14 @@ export default function LineupCreatorModal({ teamId, teamName, inningsPerGame, o
 
         setSaveStatus('saving');
         try {
+            // Prune assignments to only include active innings up to inningsCount
+            const prunedAssignments: Record<number, Record<string, number | null>> = {};
+            for (let i = 0; i < inningsCount; i++) {
+                if (assignments[i]) {
+                    prunedAssignments[i] = assignments[i];
+                }
+            }
+
             const response = await apiFetch(`/api/teams/${teamId}/lineups`, {
                 method: "POST",
                 body: JSON.stringify({
@@ -248,7 +256,7 @@ export default function LineupCreatorModal({ teamId, teamName, inningsPerGame, o
                     innings_count: inningsCount,
                     lineup_data: {
                         attendance: Object.keys(attendance).filter(id => attendance[parseInt(id)]),
-                        assignments: assignments
+                        assignments: prunedAssignments
                     }
                 })
             });

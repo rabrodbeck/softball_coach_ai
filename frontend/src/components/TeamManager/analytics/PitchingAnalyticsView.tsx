@@ -35,7 +35,7 @@ export function PitchingAnalyticsView({
     onSelectPitcher,
     inningsPerGame = 7
 }: PitchingAnalyticsViewProps) {
-    const pitchers: PitchingStats[] = players.filter(p => p.games_pitched > 0 && p.number_of_pitches > 0);
+    const pitchers: PitchingStats[] = React.useMemo(() => players.filter(p => p.games_pitched > 0 && p.number_of_pitches > 0), [players]);
     const [hoveredPitcherId, setHoveredPitcherId] = React.useState<number | null>(null);
 
     React.useEffect(() => {
