@@ -299,7 +299,13 @@ def api_google_register(data: GoogleRegisterRequest):
     return get_coach_by_email(data.email)
 
 # 3. AI RAG Chat Route (Streaming response)
-chain = build_chain()
+_chain = None
+
+def get_fallback_chain():
+    global _chain
+    if _chain is None:
+        _chain = build_chain()
+    return _chain
 
 @app.post("/api/chat")
 async def api_chat(data: ChatRequest, current_coach: dict = Depends(get_current_coach)):
@@ -369,7 +375,8 @@ async def api_chat(data: ChatRequest, current_coach: dict = Depends(get_current_
             print(f"Agent execution failed, falling back to RAG chain: {e}")
             try:
                 # Use astream_events for the fallback chain
-                async for event in chain.astream_events(
+                fallback_chain = get_fallback_chain()
+                async for event in fallback_chain.astream_events(
                     {
                         "question": data.question,
                         "chat_history": chat_history,

@@ -29,6 +29,9 @@ jobs:
           pip install -r backend/requirements.txt
 
       - name: Run Backend Syntax & Import Gate
+        env:
+          OPENAI_API_KEY: "dummy-key-for-ci-import-gate"
+          DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy"
         run: |
           cd backend
           python -c "import src.main, src.retriever, src.ingest, src.auth, src.db.coaches, src.db.players, src.db.teams, src.db.pool; print('All backend modules validated and imported cleanly!')"

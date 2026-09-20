@@ -9,18 +9,19 @@ load_dotenv()
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
-# 1. Thread-safe Connection Pool initialization
-# minconn=1, maxconn=20 is recommended for youth coach app scale on Supabase
-try:
-    connection_pool = ThreadedConnectionPool(
-        minconn=1,
-        maxconn=20,
-        dsn=DATABASE_URL,
-        cursor_factory=RealDictCursor
-    )
-    print("Database connection pool initialized successfully (min=1, max=20).")
-except Exception as e:
-    print(f"Warning: Failed to initialize database connection pool: {e}")
+if DATABASE_URL:
+    try:
+        connection_pool = ThreadedConnectionPool(
+            minconn=1,
+            maxconn=20,
+            dsn=DATABASE_URL,
+            cursor_factory=RealDictCursor
+        )
+        print("Database connection pool initialized successfully (min=1, max=20).")
+    except Exception as e:
+        print(f"Warning: Failed to initialize database connection pool: {e}")
+        connection_pool = None
+else:
     connection_pool = None
 # 2. Proxy wrapper class to intercept connection closes and return them to the pool
 class PooledConnectionWrapper:
