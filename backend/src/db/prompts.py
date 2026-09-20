@@ -1,5 +1,5 @@
 import time
-from src.db.pool import get_db_connection
+from src.db.pool import get_db_cursor
 
 # A simple local in-memory TTL (Time-To-Live) cache
 class SimpleTTLCache:
@@ -30,22 +30,18 @@ def get_system_prompt(key: str, fallback_content: str) -> str:
     if cached_prompt:
         return cached_prompt
 
-    # 2. Try reading from the database
-    conn = get_db_connection()
-    cursor = conn.cursor()
+    # 2. Try reading from the database using managed cursor context
     try:
-        cursor.execute("SELECT content FROM system_prompts WHERE key = %s LIMIT 1;", (key,))
-        row = cursor.fetchone()
-        if row:
-            content = row["content"]
-            # Save to cache
-            _prompt_cache.set(key, content)
-            return content
+        with get_db_cursor() as cursor:
+            cursor.execute("SELECT content FROM system_prompts WHERE key = %s LIMIT 1;", (key,))
+            row = cursor.fetchone()
+            if row:
+                content = row["content"]
+                # Save to cache
+                _prompt_cache.set(key, content)
+                return content
     except Exception as e:
         print(f"Warning: Failed to fetch prompt '{key}' from database: {e}")
-    finally:
-        cursor.close()
-        conn.close()
 
     # 3. Fallback to hardcoded content if database is empty or connection fails
     return fallback_content

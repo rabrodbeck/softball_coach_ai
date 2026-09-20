@@ -2,6 +2,20 @@ import { create } from 'zustand';
 import type { Team, Player } from '../components/TeamManager/types';
 import { apiFetch } from '../utils/api';
 
+async function extractErrorMessage(response: Response, defaultMessage: string): Promise<string> {
+  try {
+    const data = await response.json();
+    if (typeof data?.detail === 'string') return data.detail;
+    if (typeof data?.detail === 'object' && Array.isArray(data.detail) && data.detail[0]?.msg) {
+      return data.detail[0].msg;
+    }
+    if (typeof data?.message === 'string') return data.message;
+  } catch {
+    // Response body not JSON
+  }
+  return defaultMessage;
+}
+
 interface TeamState {
   teams: Team[];
   players: Player[];
@@ -109,7 +123,8 @@ export const useTeamStore = create<TeamState>((set, get) => ({
           });
         }
       } else {
-        set({ error: 'Failed to fetch teams' });
+        const errMsg = await extractErrorMessage(response, 'Failed to fetch teams');
+        set({ error: errMsg });
       }
     } catch (err) {
       set({ error: err instanceof Error ? err.message : 'Error fetching teams' });
@@ -127,7 +142,8 @@ export const useTeamStore = create<TeamState>((set, get) => ({
         const data = await response.json();
         set({ players: data });
       } else {
-        set({ error: 'Failed to fetch players' });
+        const errMsg = await extractErrorMessage(response, 'Failed to fetch players');
+        set({ error: errMsg });
       }
     } catch (err) {
       set({ error: err instanceof Error ? err.message : 'Error fetching players' });
@@ -182,7 +198,8 @@ export const useTeamStore = create<TeamState>((set, get) => ({
         set({ selectedTeam: newTeam, selectedTeamId: newTeam.id, userRole: 'Head Coach' });
         await get().fetchTeams(coachId, newTeam.id, onSelectTeam);
       } else {
-        set({ error: 'Failed to create team' });
+        const errMsg = await extractErrorMessage(response, 'Failed to create team');
+        set({ error: errMsg });
       }
     } catch (err) {
       set({ error: err instanceof Error ? err.message : 'Error creating team' });
@@ -222,7 +239,8 @@ export const useTeamStore = create<TeamState>((set, get) => ({
           });
         }
       } else {
-        set({ error: 'Failed to update team' });
+        const errMsg = await extractErrorMessage(response, 'Failed to update team');
+        set({ error: errMsg });
       }
     } catch (err) {
       set({ error: err instanceof Error ? err.message : 'Error updating team' });
@@ -248,7 +266,8 @@ export const useTeamStore = create<TeamState>((set, get) => ({
       if (response.ok) {
         await get().fetchPlayers(teamId);
       } else {
-        set({ error: 'Failed to create player' });
+        const errMsg = await extractErrorMessage(response, 'Failed to create player');
+        set({ error: errMsg });
       }
     } catch (err) {
       set({ error: err instanceof Error ? err.message : 'Error creating player' });
@@ -272,7 +291,8 @@ export const useTeamStore = create<TeamState>((set, get) => ({
       if (response.ok) {
         await get().fetchPlayers(teamId);
       } else {
-        set({ error: 'Failed to add returning player' });
+        const errMsg = await extractErrorMessage(response, 'Failed to add returning player');
+        set({ error: errMsg });
       }
     } catch (err) {
       set({ error: err instanceof Error ? err.message : 'Error adding returning player' });
@@ -298,7 +318,8 @@ export const useTeamStore = create<TeamState>((set, get) => ({
           await get().fetchPlayers(teamId);
         }
       } else {
-        set({ error: 'Failed to update player' });
+        const errMsg = await extractErrorMessage(response, 'Failed to update player');
+        set({ error: errMsg });
       }
     } catch (err) {
       set({ error: err instanceof Error ? err.message : 'Error updating player' });
@@ -319,7 +340,8 @@ export const useTeamStore = create<TeamState>((set, get) => ({
           await get().fetchPlayers(teamId);
         }
       } else {
-        set({ error: 'Failed to delete player' });
+        const errMsg = await extractErrorMessage(response, 'Failed to delete player');
+        set({ error: errMsg });
       }
     } catch (err) {
       set({ error: err instanceof Error ? err.message : 'Error deleting player' });

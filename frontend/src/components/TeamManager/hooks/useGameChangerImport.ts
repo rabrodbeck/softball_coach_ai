@@ -340,7 +340,12 @@ export function useGameChangerImport({
                 fetchPlayers();
                 alert("Roster statistics successfully synced with GameChanger!");
             } else {
-                alert("Failed to update statistics.");
+                const errData = await response.json().catch(() => null);
+                const msg = (typeof errData?.detail === 'string' ? errData.detail : null) || 
+                            (Array.isArray(errData?.detail) && errData.detail[0]?.msg ? errData.detail[0].msg : null) || 
+                            errData?.message || 
+                            "Failed to update statistics.";
+                alert(msg);
             }
         } catch (err) {
             console.error("Error bulk updating stats:", err);

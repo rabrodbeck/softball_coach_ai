@@ -141,6 +141,20 @@ export default function ChatArea({ userProfile, selectedTeamId }: ChatAreaProps)
                                         }
                                         return prev;
                                     });
+                                } else if (parsed.detail || parsed.type === "error") {
+                                    const errorText = parsed.detail || parsed.message || "An error occurred during coaching strategy generation.";
+                                    setMessages((prev) => {
+                                        const lastIndex = prev.length - 1;
+                                        if (lastIndex < 0) return prev;
+                                        const lastMsg = prev[lastIndex];
+                                        if (lastMsg && lastMsg.role === "assistant") {
+                                            return [
+                                                ...prev.slice(0, lastIndex),
+                                                { ...lastMsg, content: `❌ ${errorText}` }
+                                            ];
+                                        }
+                                        return prev;
+                                    });
                                 }
                             } catch (e) {
                                 console.error("Error parsing stream event:", e);

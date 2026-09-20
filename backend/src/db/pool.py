@@ -1,4 +1,5 @@
 import os
+import time
 from contextlib import contextmanager
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -59,13 +60,20 @@ class PooledConnectionWrapper:
 def get_db_connection():
     """Retrieves a pooled database connection wrapped in a proxy wrapper."""
     if connection_pool:
-        try:
-            conn = connection_pool.getconn()
-            return PooledConnectionWrapper(conn, connection_pool)
-        except Exception as e:
-            print(f"Connection pool exhausted or error: {e}. Falling back to direct connection.")
+        # Retry with brief backoff for transient concurrency bursts
+        for attempt in range(3):
+            try:
+                conn = connection_pool.getconn()
+                return PooledConnectionWrapper(conn, connection_pool)
+            except Exception as e:
+                if attempt < 2:
+                    time.sleep(0.05 * (attempt + 1))
+                else:
+                    print(f"Connection pool exhausted after retries: {e}. Falling back to direct connection.")
     
     # Fallback to creating a direct physical connection if the pool fails/exhausts
+    if not DATABASE_URL:
+        raise ValueError("DATABASE_URL environment variable is not configured.")
     return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
 
 @contextmanager
